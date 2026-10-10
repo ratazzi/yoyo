@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>Label</key><string>dev.timezone.feasibility.launchd-probe</string>
+    <key>ProgramArguments</key><array>
+        <string>/Users/ratazzi/workspace/macos-timezone-feasibility/build/probe</string>
+    </array>
+    <key>EnvironmentVariables</key><dict>
+        <key>DYLD_INSERT_LIBRARIES</key><string>/Users/ratazzi/workspace/macos-timezone-feasibility/build/libenforced.dylib</string>
+        <key>PROCESS_TIMEZONE</key><string>Asia/Tokyo</string>
+    </dict>
+    <key>RunAtLoad</key><true/>
+    <key>StandardOutPath</key><string>/Users/ratazzi/workspace/macos-timezone-feasibility/build/launchd-stdout.txt</string>
+    <key>StandardErrorPath</key><string>/Users/ratazzi/workspace/macos-timezone-feasibility/build/launchd-stderr.txt</string>
+</dict></plist>

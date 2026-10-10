@@ -1,0 +1,31 @@
+#!/bin/zsh
+set -eu
+cd "${0:A:h:h}"
+mkdir -p build
+/usr/bin/clang -fobjc-arc -framework Foundation -framework CoreFoundation Tests/Legacy/probe.m -o build/probe
+/usr/bin/clang -arch arm64 -arch arm64e -dynamiclib Tests/Legacy/inject.c -o build/libtimezone.dylib
+./build/probe
+TZ=Asia/Tokyo ./build/probe
+./build/probe Asia/Tokyo
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libtimezone.dylib" ./build/probe
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libtimezone.dylib" /bin/date -r 0 '+%F %T %Z %z'
+TZ=Asia/Tokyo /bin/date -r 0 '+%F %T %Z %z'
+cp build/probe build/probe-hardened
+/usr/bin/codesign --force --sign - --options runtime build/probe-hardened
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libtimezone.dylib" ./build/probe-hardened
+/usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -arch arm64 -arch arm64e -dynamiclib -framework Foundation -framework CoreFoundation -licucore Sources/Injection/enforced.m Sources/Injection/timezone-files.c Sources/Injection/runtime-trace.c -o build/libenforced.dylib
+/usr/bin/clang -fobjc-arc -framework Foundation -framework CoreFoundation Tests/Legacy/adversary.m -o build/adversary
+if PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libtimezone.dylib" ./build/adversary; then
+    print -u2 'Expected environment-only injection to fail adversarial tests'
+    exit 1
+fi
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libenforced.dylib" ./build/adversary
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libenforced.dylib" /bin/date -r 0 '+%F %T %Z %z'
+if [[ "${1:-}" == --gui ]]; then
+    mkdir -p build/TimezoneProbe.app/Contents/MacOS
+    cp build/probe build/TimezoneProbe.app/Contents/MacOS/TimezoneProbe
+    cp Tests/Legacy/probe-Info.plist build/TimezoneProbe.app/Contents/Info.plist
+    /usr/bin/codesign --force --sign - build/TimezoneProbe.app
+    /usr/bin/clang -fobjc-arc -framework AppKit Tests/Legacy/launch.m -o build/launch
+    ./build/launch "$PWD/build/TimezoneProbe.app" Asia/Tokyo "$PWD/build/gui-tokyo.txt"
+fi

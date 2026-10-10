@@ -1,0 +1,26 @@
+#!/bin/zsh
+set -eu
+cd "${0:A:h:h}"
+lab_bin="$PWD/build/TimezoneLab.app/Contents/Resources/bin"
+lab_library="$PWD/build/TimezoneLab.app/Contents/Resources/libenforced.dylib"
+lab_daemon="$PWD/build/TimezoneLab.app/Contents/Library/LaunchServices/TimezoneLabDaemon.app/Contents/MacOS/timezone-es-daemon"
+mkdir -p build/evidence
+"$lab_daemon" --self-test > build/evidence/stack-self-test.txt
+cp "$lab_bin/timezone-probe" build/unselected-timezone-probe
+/usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \
+    ./build/unselected-timezone-probe --scan-zoneinfo > build/evidence/host.json
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$lab_library" \
+    "$lab_bin/timezone-probe" --expect Asia/Tokyo --require-injected --require-files --attack --scan-zoneinfo > build/evidence/explicit-injection.json
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$lab_library" \
+    "$lab_bin/file-hook-check" > build/evidence/file-hook-compatibility.txt
+if /usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \
+    ./build/unselected-timezone-probe --expect Asia/Tokyo --require-injected > build/evidence/not-injected.json; then
+    print -u2 'Negative control unexpectedly reported injection'
+    exit 1
+fi
+PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$lab_library" \
+    "$lab_bin/timezone-probe" --expect Asia/Tokyo --require-injected --require-files > build/evidence/strict-files.json
+/usr/bin/codesign --verify --deep --strict build/TimezoneLab.app
+/usr/bin/plutil -lint Resources/Info.plist Resources/Daemon.entitlements build/TimezoneLab.app/Contents/Library/LaunchDaemons/dev.timezone.lab.daemon.plist
+print -r -- 'CLI controls, mutation checks, startup-stack self-test and bundle verification: PASS'
+print -r -- 'Run verify-live.sh to additionally verify the running ES service.'
