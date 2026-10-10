@@ -6,12 +6,14 @@ import ServiceManagement
 final class AppStore: ObservableObject {
     @Published var policy = PolicyDocument()
     @Published var prompts: [LaunchPrompt] = []
+    @Published var recentApps: [RecentApp] = []
     @Published var status = "Offline"
     @Published var errorMessage: String?
     @Published var showingSettings = false
     let stateDirectory: URL
     private var polling = false
     private var timer: Timer?
+    private var launchMonitor: AppLaunchMonitor?
 
     var service: SMAppService { .daemon(plistName: "dev.timezone.lab.daemon.plist") }
     var online: Bool { status == "Active" }
@@ -32,6 +34,9 @@ final class AppStore: ObservableObject {
         } catch where (error as NSError).code == NSFileReadNoSuchFileError {
             // First launch starts with no rules and no background service.
         } catch { errorMessage = error.localizedDescription }
+        launchMonitor = AppLaunchMonitor(file: stateDirectory.appendingPathComponent("recent-apps.json"), onChange: { [weak self] apps in
+            self?.recentApps = apps
+        }, onError: { [weak self] error in self?.errorMessage = error })
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
@@ -95,7 +100,7 @@ final class AppStore: ObservableObject {
         guard !polling else { return }; polling = true
         let directory = stateDirectory
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let reply = TZControl(directory.appendingPathComponent("control.sock").path, ["command": "poll", "include_events": false])
+            let reply = TZControl(directory.appendingPathComponent("control.sock").path, ["command": "poll", "include_events": false, "include_processes": false])
             let stateData = try? Data(contentsOf: directory.appendingPathComponent("daemon-state.json"))
             let diskState = stateData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             let promptData = reply?["prompts"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
@@ -109,5 +114,9 @@ final class AppStore: ObservableObject {
                 self.prompts = prompts.filter { $0.expires_at > Date().timeIntervalSince1970 }.sorted { $0.expires_at < $1.expires_at }
             }
         }
+    }
+
+    func clearHistory() {
+        launchMonitor?.clear()
     }
 }

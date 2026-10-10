@@ -38,11 +38,14 @@ The development build uses `build/state/`:
 - `policy.json`: validated rules, ES enabled flag, and app default.
 - `daemon-state.json`: health and latest launch outcome.
 - `behavior.jsonl`: optional metadata logs, rotated at 4 MiB with four archives.
+- `recent-apps.json`: UI-owned application launch history, up to 100 regular/menu bar apps by Bundle ID. Uses Workspace lifecycle notifications and actual launch dates; CLI, helpers, background agents and focus changes do not refresh it. Works without ES. The previous experimental `recent-launches.json` is left untouched and no longer used.
 - `active-sessions.json`: process-session recovery metadata, including only the original TZ/TZFILE environment values needed for restoration; this is not a behavior log.
 - `control.sock`: authenticated local UI and hook communication.
 - `trace-*.flag`: shared live logging switches, cleaned up after tracked processes exit.
 
 The UI has no activity or log viewer. Settings can open the log folder. Default-mode programs have ES metadata only; timezone-function records require the hook. File events cover operations such as open/mmap/write, not every individual read. Hook tracing uses bounded waits and is best effort.
+
+Temporary execution diagnostics are separate from app history and opt-in behavior logs. `execution-diagnostics-config.json` enables a bounded capture using a UUID `run_id` and absolute `expires_at`; the daemon caps the remaining duration at ten minutes and stops automatically. `execution-diagnostics-<UUID>.jsonl` contains exec identities, parent/responsible audit identities and cached ancestry, with no arguments, environment variables or file content. `scripts/analyze-executions.swift` summarizes the resulting file. The completed sampling sessions are disabled; enabling a new capture requires a new unexpired configuration.
 
 ## Validation and limitations
 

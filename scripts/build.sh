@@ -14,6 +14,8 @@ mkdir -p "$lab_resources/bin" "$lab_app/Contents/MacOS" "$lab_helper/Contents/Ma
 /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/program-policy.o build/control-channel.o -o "$lab_helper/Contents/MacOS/timezone-es-daemon"
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/policy-tests
 build/policy-tests
+/usr/bin/swiftc -parse-as-library Sources/App/RecentApps.swift Tests/Unit/recent-apps-tests.swift -o build/recent-apps-tests
+build/recent-apps-tests
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "$lab_resources/bin/timezone-probe"
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
 /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "$lab_resources/bin/cli-start-paths"

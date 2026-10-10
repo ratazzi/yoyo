@@ -6,6 +6,8 @@ A native macOS menu bar app for per-program time zones. The interface is written
 
 Open `build/TimezoneLab.app`. Use **+** to add an application, executable, or path pattern. Click a program to edit its rule:
 
+You can also drag applications or executable files onto the main window. Drop multiple programs to review their rules in sequence; dropping an existing program opens its rule instead of creating a duplicate. Other files and ordinary folders are skipped.
+
 - **System Default** leaves the program's normal environment intact, without injection.
 - **Fixed Time Zone** applies the selected IANA time zone.
 - **Ask Every Launch** asks once per independent launch. Cancelling or timing out stops the launch.
@@ -13,6 +15,8 @@ Open `build/TimezoneLab.app`. Use **+** to add an application, executable, or pa
 **Settings → Default Time Zone** controls every new program without a matching rule. It can differ from the system time zone. Explicit System Default rules exclude programs. Children inherit the launch choice unless a new explicit rule overrides it.
 
 Behavior logging is optional per rule and writes metadata to `build/state/behavior.jsonl`. There is no log viewer in the app. File contents, full arguments, and environment variables are not logged.
+
+**Recently Opened Apps** uses macOS application lifecycle notifications, independently of ES. It includes regular and menu bar applications, excluding CLI executions, nested helpers and background services. App focus changes and child commands do not update launch times or reorder the list. Use **Add Rule…** to configure an app directly from history. The five newest are shown by default, with up to 100 saved by Bundle ID. On startup, running apps are seeded using their actual launch dates. Closing the window keeps monitoring active; explicitly quitting the menu app stops observation until it is reopened. Apps that both start and exit while the menu app is quit cannot be reconstructed. Behavior and execution diagnostics remain file-only.
 
 ## Build
 

@@ -5,6 +5,10 @@ struct DashboardView: View {
     @ObservedObject var store: AppStore
     @State private var search = ""
     @State private var editingRule: ProgramRule?
+    @State private var isDropTargeted = false
+    @State private var pendingImports: [ProgramRule] = []
+    @State private var importWarning: String?
+    @State private var showingAllRecent = false
     @FocusState private var searchFocused: Bool
 
     private var filtered: [ProgramRule] {
@@ -49,11 +53,12 @@ struct DashboardView: View {
                     }
                     section(title: "APPLICATIONS", kind: "app")
                     section(title: "COMMAND LINE", kind: "cli")
-                    if filtered.isEmpty {
+                    recentSection
+                    if filtered.isEmpty && (search.isEmpty || matchingRecent.isEmpty) {
                         VStack(spacing: 14) {
                             Image(systemName: "globe").font(.system(size: 38, weight: .light)).foregroundStyle(.tertiary)
                             Text(search.isEmpty ? "No Program Rules" : "No Matching Programs").font(.title3).fontWeight(.medium)
-                            Text(search.isEmpty ? "Add a program to give it a fixed time zone, ask each launch, or use the system default." : "Try another name, path, or time zone.")
+                            Text(search.isEmpty ? "Drop applications or executables here to add time zone rules." : "Try another name, path, or time zone.")
                                 .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 400)
                             if search.isEmpty { Button("Add Application…") { chooseProgram(app: true) } }
                         }.frame(maxWidth: .infinity).padding(.vertical, 46)
@@ -77,12 +82,130 @@ struct DashboardView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(item: $editingRule) { rule in RuleEditor(store: store, initial: rule) }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [7, 5])))
+                    .overlay {
+                        VStack(spacing: 12) {
+                            Image(systemName: "plus.app").font(.system(size: 36, weight: .light)).foregroundStyle(Color.accentColor)
+                            Text("Drop Applications or Executables").font(.title3).fontWeight(.semibold)
+                            Text("Review a time zone rule for each program.").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(12).allowsHitTesting(false)
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            importPrograms(urls)
+        } isTargeted: { isDropTargeted = $0 }
+        .sheet(item: $editingRule, onDismiss: advanceImport) { rule in RuleEditor(store: store, initial: rule) }
         .sheet(isPresented: $store.showingSettings) { SettingsView(store: store) }
         .alert("Timezone Lab", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: .init("FocusProgramSearch"))) { _ in searchFocused = true }
+    }
+
+    private var matchingRecent: [RecentApp] {
+        store.recentApps.filter { search.isEmpty || ($0.name + $0.path).localizedCaseInsensitiveContains(search) }
+    }
+
+    private func existingRule(for launch: RecentApp) -> ProgramRule? {
+        store.policy.rules.first { $0.kind == "app" && $0.pattern == launch.path }
+    }
+
+    @ViewBuilder
+    private var recentSection: some View {
+        if !matchingRecent.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("RECENTLY OPENED APPS").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                    Spacer()
+                    if matchingRecent.count > 5 {
+                        Button(showingAllRecent ? "Show Less" : "View All") { showingAllRecent.toggle() }
+                            .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.system(size: 11))
+                    }
+                    Menu {
+                        Button("Clear Recent Apps") { store.clearHistory() }
+                    } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary) }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Recent app history")
+                }.padding(.horizontal, 10)
+                Surface {
+                    VStack(spacing: 0) {
+                        let visible = Array(matchingRecent.prefix(showingAllRecent ? 100 : 5))
+                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, launch in
+                            HStack(spacing: 10) {
+                                ProgramIcon(path: launch.path, size: 22)
+                                Text(launch.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                Text(launch.path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Text("\(Text(Date(timeIntervalSince1970: launch.opened_at), style: .relative)) ago")
+                                    .font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                                Button(existingRule(for: launch) == nil ? "Add Rule…" : "Edit Rule…") {
+                                    if let existing = existingRule(for: launch) { editingRule = existing }
+                                    else {
+                                        var rule = ProgramRule(); rule.kind = "app"; rule.name = launch.name; rule.pattern = launch.path
+                                        editingRule = rule
+                                    }
+                                }.controlSize(.small)
+                            }.padding(.horizontal, 14).padding(.vertical, 8)
+                                .help("\(launch.path) · Opened \(Date(timeIntervalSince1970: launch.opened_at).formatted())")
+                            if index != visible.count - 1 { Divider().padding(.leading, 46) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func importPrograms(_ urls: [URL]) -> Bool {
+        guard editingRule == nil, !store.showingSettings else { return false }
+        var seen = Set<String>()
+        var candidates: [ProgramRule] = []
+        var rejected = 0
+        for url in urls {
+            guard url.isFileURL else { rejected += 1; continue }
+            let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+            guard seen.insert(resolved.path).inserted else { continue }
+            let isApp = resolved.pathExtension.lowercased() == "app"
+            let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            let valid = isApp
+                ? values?.isDirectory == true && Bundle(url: resolved)?.executableURL != nil
+                : values?.isRegularFile == true && FileManager.default.isExecutableFile(atPath: resolved.path)
+            guard valid else { rejected += 1; continue }
+            if let existing = store.policy.rules.first(where: {
+                !$0.pattern.contains("*") && URL(fileURLWithPath: $0.pattern).resolvingSymlinksInPath().standardizedFileURL.path == resolved.path
+            }) {
+                candidates.append(existing)
+            } else {
+                var rule = ProgramRule()
+                rule.kind = isApp ? "app" : "cli"; rule.pattern = resolved.path
+                rule.name = isApp ? resolved.deletingPathExtension().lastPathComponent : resolved.lastPathComponent
+                candidates.append(rule)
+            }
+        }
+        guard !candidates.isEmpty else {
+            if rejected > 0 { store.errorMessage = "Drop .app application bundles or executable files. Other files and folders cannot be added." }
+            return false
+        }
+        search = ""
+        importWarning = rejected > 0 ? "Some items were skipped. Only .app application bundles and executable files can be added." : nil
+        pendingImports = Array(candidates.dropFirst())
+        editingRule = candidates[0]
+        return true
+    }
+
+    private func advanceImport() {
+        if !pendingImports.isEmpty {
+            // Present the next sheet after the previous dismissal finishes.
+            let next = pendingImports.removeFirst()
+            DispatchQueue.main.async { editingRule = next }
+        } else if let warning = importWarning {
+            importWarning = nil
+            DispatchQueue.main.async { store.errorMessage = warning }
+        }
     }
 
     @ViewBuilder

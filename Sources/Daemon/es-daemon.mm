@@ -36,12 +36,92 @@ static uid_t owner;
 static NSUInteger sequence;
 static BOOL filesSubscribed;
 static double promptTimeout = 20;
+static NSMutableDictionary *processDescriptors;
+static NSMutableOrderedSet *descriptorOrder;
+static NSMutableDictionary *processParentTokens;
+static NSData *diagnosticConfig;
+static NSString *diagnosticRun;
+static double diagnosticUntil;
+static int diagnosticFD = -1;
 
 static NSString *token(es_string_token_t value) {
     return [[NSString alloc] initWithBytes:value.data length:value.length encoding:NSUTF8StringEncoding] ?: @"";
 }
 static NSString *key(audit_token_t value) {
     return [NSString stringWithFormat:@"%d:%u", audit_token_to_pid(value), value.val[7]];
+}
+static NSDictionary *remember_descriptor(NSDictionary *value) {
+    NSString *identifier = value[@"id"];
+    processDescriptors[identifier] = value;
+    [descriptorOrder removeObject:identifier]; [descriptorOrder addObject:identifier];
+    while (descriptorOrder.count > 4096) {
+        [processParentTokens removeObjectForKey:descriptorOrder.firstObject];
+        [processDescriptors removeObjectForKey:descriptorOrder.firstObject]; [descriptorOrder removeObjectAtIndex:0];
+    }
+    return value;
+}
+static NSDictionary *describe_process(const es_process_t *process, uint32_t version) {
+    double started = version >= 3 ? process->start_time.tv_sec + process->start_time.tv_usec / 1e6 : 0;
+    if (version >= 4) processParentTokens[key(process->audit_token)] = [NSData dataWithBytes:&process->parent_audit_token length:sizeof(audit_token_t)];
+    return remember_descriptor(@{@"id": key(process->audit_token), @"pid": @(audit_token_to_pid(process->audit_token)),
+        @"pidversion": @(process->audit_token.val[7]), @"path": token(process->executable->path), @"started_at": @(started),
+        @"parent_id": version >= 4 ? key(process->parent_audit_token) : @"", @"parent_pid": @(process->ppid),
+        @"uid": @(audit_token_to_euid(process->audit_token)), @"real_uid": @(audit_token_to_ruid(process->audit_token))});
+}
+static NSDictionary *describe_audit(audit_token_t audit) {
+    NSString *identifier = key(audit);
+    NSDictionary *known = processDescriptors[identifier];
+    if (known) return remember_descriptor(known);
+    pid_t pid = audit_token_to_pid(audit); if (pid <= 1) return nil;
+    char path[PROC_PIDPATHINFO_MAXSIZE], verified[PROC_PIDPATHINFO_MAXSIZE]; struct proc_bsdinfo info;
+    if (proc_pidpath_audittoken(&audit, path, sizeof(path)) <= 0) return nil;
+    double started = 0;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) == sizeof(info)) started = info.pbi_start_tvsec + info.pbi_start_tvusec / 1e6;
+    // Verify the audit generation again after querying start time: never join by PID alone.
+    if (proc_pidpath_audittoken(&audit, verified, sizeof(verified)) <= 0 || strcmp(path, verified)) return nil;
+    return remember_descriptor(@{@"id": identifier, @"pid": @(pid), @"pidversion": @(audit.val[7]), @"path": @(path), @"started_at": @(started),
+        @"uid": @(audit_token_to_euid(audit)), @"real_uid": @(audit_token_to_ruid(audit))});
+}
+static NSArray *describe_ancestors(NSDictionary *parent) {
+    NSMutableArray *ancestors = [NSMutableArray new]; NSMutableSet *seen = [NSMutableSet new];
+    NSDictionary *current = parent;
+    while (current && ancestors.count < 12 && ![seen containsObject:current[@"id"]]) {
+        [ancestors addObject:current]; [seen addObject:current[@"id"]];
+        NSData *data = processParentTokens[current[@"id"]]; if (data.length != sizeof(audit_token_t)) break;
+        audit_token_t token; [data getBytes:&token length:sizeof(token)]; current = describe_audit(token);
+    }
+    return ancestors;
+}
+static void reload_diagnostics(void) {
+    NSData *data = [NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:@"execution-diagnostics-config.json"]];
+    if (data && ![data isEqual:diagnosticConfig]) {
+        diagnosticConfig = data;
+        if (diagnosticFD >= 0) close(diagnosticFD); diagnosticFD = -1;
+        NSDictionary *value = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSUUID *run = [value isKindOfClass:NSDictionary.class] && [value[@"run_id"] isKindOfClass:NSString.class] ? [[NSUUID alloc] initWithUUIDString:value[@"run_id"]] : nil;
+        double now = [NSDate date].timeIntervalSince1970;
+        diagnosticUntil = run && [value[@"expires_at"] isKindOfClass:NSNumber.class] ? fmin([value[@"expires_at"] doubleValue], now + 600) : 0;
+        diagnosticRun = run.UUIDString;
+        if (diagnosticUntil > now) {
+            NSString *path = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"execution-diagnostics-%@.jsonl", diagnosticRun]];
+            diagnosticFD = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);
+            if (diagnosticFD >= 0) fchown(diagnosticFD, owner, (gid_t)-1);
+        }
+    }
+    if (diagnosticFD >= 0 && [NSDate date].timeIntervalSince1970 >= diagnosticUntil) { close(diagnosticFD); diagnosticFD = -1; }
+    state[@"execution_diagnostics_active"] = @(diagnosticFD >= 0);
+}
+static void record_diagnostic(const es_message_t *message, NSDictionary *process, NSDictionary *parent, NSDictionary *responsible) {
+    if (diagnosticFD < 0 || [NSDate date].timeIntervalSince1970 >= diagnosticUntil) return;
+    NSDictionary *event = @{@"run_id": diagnosticRun, @"time": @([NSDate date].timeIntervalSince1970), @"type": @"exec",
+        @"process": process, @"parent": parent ?: @{}, @"responsible": responsible ?: @{}, @"ancestors": describe_ancestors(parent),
+        @"event_sequence": @(message->version >= 4 ? message->seq_num : 0),
+        @"global_sequence": @(message->version >= 4 ? message->global_seq_num : 0)};
+    NSMutableData *line = [[NSJSONSerialization dataWithJSONObject:event options:0 error:nil] mutableCopy];
+    [line appendBytes:"\n" length:1];
+    if (write(diagnosticFD, line.bytes, line.length) != (ssize_t)line.length) {
+        state[@"diagnostics_error"] = @"Execution diagnostic write failed"; close(diagnosticFD); diagnosticFD = -1;
+    }
 }
 static double deadline_seconds(const es_message_t *message) {
     mach_timebase_info_data_t base; mach_timebase_info(&base);
@@ -275,6 +355,10 @@ static void process_message(const es_message_t *message) {
     }
     NSMutableDictionary *record = record_for(message->process);
     if (message->event_type == ES_EVENT_TYPE_NOTIFY_FORK) {
+        if (diagnosticFD >= 0) {
+            describe_process(message->process, message->version);
+            describe_process(message->event.fork.child, message->version);
+        }
         if (record) {
             const es_process_t *child = message->event.fork.child;
             NSMutableDictionary *copy = new_record(child, [record[@"session"] copy]); copy[@"loaded"] = record[@"loaded"];
@@ -284,6 +368,16 @@ static void process_message(const es_message_t *message) {
         return;
     }
     if (message->event_type == ES_EVENT_TYPE_NOTIFY_EXEC) {
+        const es_process_t *target = message->event.exec.target;
+        NSString *executable = token(target->executable->path);
+        if (diagnosticFD >= 0 && (audit_token_to_ruid(target->audit_token) == owner || audit_token_to_euid(target->audit_token) == owner) &&
+            ![executable isEqual:uiPath] && ![executable isEqual:NSBundle.mainBundle.executablePath]) {
+            describe_process(message->process, message->version);
+            NSDictionary *process = describe_process(target, message->version);
+            NSDictionary *parent = message->version >= 4 ? describe_audit(target->parent_audit_token) : nil;
+            NSDictionary *responsible = message->version >= 4 ? describe_audit(target->responsible_audit_token) : nil;
+            record_diagnostic(message, process, parent, responsible);
+        }
         record = record_for(message->event.exec.target);
         pid_t pid = audit_token_to_pid(message->event.exec.target->audit_token);
         NSString *current = key(message->event.exec.target->audit_token);
@@ -350,7 +444,9 @@ static NSDictionary *control(NSDictionary *request, pid_t pid, uid_t uid) {
     for (TZPending *p in pending.allValues) [prompts addObject:@{@"id": p.identifier, @"path": p.path,
         @"name": p.decision.rule.name, @"zone": p.decision.session.zone, @"expires_at": @(p.expires),
         @"parent_path": p.parent[@"path"] ?: @"", @"parent_pid": p.parent[@"pid"] ?: @0}];
-    for (NSDictionary *record in records.allValues) { if (processes.count == 200) break; [processes addObject:public_record(record)]; }
+    if (![request[@"include_processes"] isEqual:@NO]) for (NSDictionary *record in records.allValues) {
+        if (processes.count == 200) break; [processes addObject:public_record(record)];
+    }
     for (NSDictionary *event in [request[@"include_events"] isEqual:@NO] ? @[] : recent) if ([event[@"sequence"] unsignedIntegerValue] > [request[@"after"] unsignedIntegerValue]) {
         [events addObject:event]; if (events.count == 100) break;
     }
@@ -385,6 +481,7 @@ int main(int argc, const char **argv) {
         socketPath = [directory stringByAppendingPathComponent:@"control.sock"];
         engineQueue = dispatch_queue_create("dev.timezone.lab.engine", DISPATCH_QUEUE_SERIAL);
         records = [NSMutableDictionary new]; pending = [NSMutableDictionary new]; recent = [NSMutableArray new];
+        processDescriptors = [NSMutableDictionary new]; descriptorOrder = [NSMutableOrderedSet new]; processParentTokens = [NSMutableDictionary new];
         state = [@{@"pid": @(getpid()), @"status": @"starting", @"injection_method": @"AUTH_EXEC + startup environment rewrite"} mutableCopy];
         policy = [TZProgramPolicy policyWithDictionary:configuration error:nil]; if (!policy) return 2;
         restore(); reload_policy(); publish();
@@ -406,13 +503,14 @@ int main(int argc, const char **argv) {
         dispatch_sync(engineQueue, ^{ state[@"status"] = @"listening"; policyData = nil; reload_policy(); publish(); });
         dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, engineQueue);
         dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, NSEC_PER_SEC, NSEC_PER_SEC / 10);
-        dispatch_source_set_event_handler(timer, ^{ @autoreleasepool { reload_policy(); publish(); } }); dispatch_resume(timer);
+        dispatch_source_set_event_handler(timer, ^{ @autoreleasepool { reload_policy(); reload_diagnostics(); publish(); } }); dispatch_resume(timer);
         signal(SIGTERM, SIG_IGN);
         dispatch_source_t term = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, engineQueue);
         dispatch_source_set_event_handler(term, ^{
             es_unsubscribe_all(client);
             for (NSString *identifier in pending.allKeys) resolve(identifier, @"cancel", nil);
-            persist(); es_delete_client(client); state[@"status"] = @"stopped"; publish(); unlink(socketPath.fileSystemRepresentation); exit(0);
+            persist(); if (diagnosticFD >= 0) close(diagnosticFD);
+            es_delete_client(client); state[@"status"] = @"stopped"; publish(); unlink(socketPath.fileSystemRepresentation); exit(0);
         }); dispatch_resume(term); dispatch_main();
     }
 }
