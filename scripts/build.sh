@@ -27,6 +27,8 @@ build/recent-apps-tests
 build/display-preferences-tests
 /usr/bin/swiftc -parse-as-library -framework AppKit Sources/App/MenuRowView.swift Tests/Unit/menu-program-row-tests.swift -o build/menu-program-row-tests
 build/menu-program-row-tests
+/usr/bin/swiftc -parse-as-library Sources/App/WindowBadgeModel.swift Tests/Unit/window-badge-tests.swift -o build/window-badge-tests
+build/window-badge-tests
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "$lab_resources/bin/timezone-probe"
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
 /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "$lab_resources/bin/cli-start-paths"

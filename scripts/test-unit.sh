@@ -12,6 +12,8 @@ build/tests/recent-apps-tests
 build/tests/display-preferences-tests
 /usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library -framework AppKit Sources/App/MenuRowView.swift Tests/Unit/menu-program-row-tests.swift -o build/tests/menu-program-row-tests
 build/tests/menu-program-row-tests
+/usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library Sources/App/WindowBadgeModel.swift Tests/Unit/window-badge-tests.swift -o build/tests/window-badge-tests
+build/tests/window-badge-tests
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/program-policy.m -o build/tests/program-policy.o
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/control-channel.m -o build/tests/control-channel.o
 /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/tests/program-policy.o build/tests/control-channel.o -o build/tests/daemon-self-test

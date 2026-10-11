@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var observation: AnyCancellable?
     private var statusDisplay: StatusDisplayController?
     private var statusMenu: StatusMenuController?
+    private var windowBadge: WindowBadgeController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
@@ -48,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 700, height: 460)
         window.contentView = NSHostingView(rootView: DashboardView(store: store).ignoresSafeArea())
         window.setFrameAutosaveName("TimezoneLabMainWindow"); window.center()
+        windowBadge = WindowBadgeController(store: store)
         observation = store.$prompts.sink { [weak self] prompts in
             // Published notifications precede assignment. Present on the next main turn.
             DispatchQueue.main.async { self?.presentPrompt(prompts.first) }

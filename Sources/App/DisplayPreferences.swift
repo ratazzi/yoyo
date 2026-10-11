@@ -19,10 +19,11 @@ struct DisplayPreferences: Codable, Equatable {
     var dockContent: ClockContent = .timeAndCity
     var use24HourTime = true
     var showSeconds = false
+    var showWindowBadge = false
     var favoriteTimeZones = ["Etc/UTC", "Asia/Tokyo", "America/New_York", "Europe/London"]
 
     init() {}
-    private enum CodingKeys: String, CodingKey { case menuBarContent, showDockIcon, dockContent, use24HourTime, showSeconds, favoriteTimeZones }
+    private enum CodingKeys: String, CodingKey { case menuBarContent, showDockIcon, dockContent, use24HourTime, showSeconds, favoriteTimeZones, showWindowBadge }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         menuBarContent = try values.decodeIfPresent(ClockContent.self, forKey: .menuBarContent) ?? .timeAndCity
@@ -30,6 +31,7 @@ struct DisplayPreferences: Codable, Equatable {
         dockContent = try values.decodeIfPresent(ClockContent.self, forKey: .dockContent) ?? .timeAndCity
         use24HourTime = try values.decodeIfPresent(Bool.self, forKey: .use24HourTime) ?? true
         showSeconds = try values.decodeIfPresent(Bool.self, forKey: .showSeconds) ?? false
+        showWindowBadge = try values.decodeIfPresent(Bool.self, forKey: .showWindowBadge) ?? false
         favoriteTimeZones = try values.decodeIfPresent([String].self, forKey: .favoriteTimeZones) ?? ["Etc/UTC", "Asia/Tokyo", "America/New_York", "Europe/London"]
     }
 }

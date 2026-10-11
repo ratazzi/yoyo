@@ -143,6 +143,21 @@ struct SettingsView: View {
                 }.padding(18)
             }
             Surface {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Show Time Zone Near Active Window", isOn: $display.showWindowBadge).toggleStyle(.switch)
+                    Text("A mouse-through label follows the active window when its injected time zone is confirmed. Requires Accessibility access. Full-screen windows use the menu bar instead.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Preview Badge") { NotificationCenter.default.post(name: .init("PreviewWindowBadge"), object: nil) }
+                        Button("Accessibility Settings…") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                        Spacer()
+                    }
+                    Text(store.windowBadgeStatus).font(.callout).foregroundStyle(.secondary)
+                }.padding(18)
+            }
+            Surface {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {

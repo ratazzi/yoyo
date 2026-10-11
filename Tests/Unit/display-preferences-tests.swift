@@ -32,6 +32,7 @@ struct DisplayPreferencesTests {
         policy.default_zone = "America/Argentina/Buenos_Aires"
         assert(clock.make(policy: policy, preferences: preferences, date: epoch, system: system).city == "Buenos Aires")
         preferences.showDockIcon = true; preferences.dockContent = .city
+        preferences.showWindowBadge = true
         preferences.favoriteTimeZones = ["Asia/Hong_Kong", "Etc/UTC"]
         let restored = try JSONDecoder().decode(DisplayPreferences.self, from: JSONEncoder().encode(preferences))
         let defaults = try JSONDecoder().decode(DisplayPreferences.self, from: Data("{}".utf8))

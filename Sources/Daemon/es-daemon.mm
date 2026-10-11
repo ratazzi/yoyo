@@ -137,7 +137,8 @@ static NSDictionary *public_record(NSDictionary *record) {
     return @{@"pid": record[@"pid"], @"pidversion": record[@"pidversion"], @"parent_pid": record[@"parent_pid"],
         @"path": record[@"path"], @"session": session.identifier, @"rule_id": session.ruleID,
         @"mode": session.mode, @"zone": [session.mode isEqual:@"fixed"] ? session.zone : @"", @"loaded": record[@"loaded"] ?: @NO,
-        @"logging": @([policy loggingEnabledForSession:session])};
+        @"logging": @([policy loggingEnabledForSession:session]),
+        @"started_at": @([record[@"start_sec"] doubleValue] + [record[@"start_usec"] doubleValue] / 1e6)};
 }
 static void persist(void) {
     NSMutableArray *saved = [NSMutableArray new];
@@ -432,6 +433,20 @@ static NSDictionary *control(NSDictionary *request, pid_t pid, uid_t uid) {
         return @{@"error": @"Unknown process session"};
     }
     if (uid != owner || !tz_is_signed_ui(pid)) return @{@"error": @"Signed owner UI required"};
+    if ([command isEqual:@"process"]) {
+        pid_t target = [request[@"pid"] intValue];
+        struct proc_bsdinfo info; char path[PROC_PIDPATHINFO_MAXSIZE];
+        if (target > 1 && proc_pidinfo(target, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) == sizeof(info) &&
+            proc_pidpath(target, path, sizeof(path)) > 0) {
+            for (NSDictionary *record in records.allValues) {
+                if ([record[@"pid"] intValue] == target && [record[@"start_sec"] unsignedLongLongValue] == info.pbi_start_tvsec &&
+                    [record[@"start_usec"] unsignedLongLongValue] == info.pbi_start_tvusec && [record[@"path"] isEqual:@(path)]) {
+                    return @{@"process": public_record(record)};
+                }
+            }
+        }
+        return @{@"process": NSNull.null};
+    }
     if ([command isEqual:@"answer"]) {
         NSString *mode = request[@"mode"], *zone = canonical_timezone_name(request[@"zone"]);
         if (![@[@"fixed", @"default", @"cancel"] containsObject:mode] || ([mode isEqual:@"fixed"] && !zone)) return @{@"error": @"Invalid answer"};

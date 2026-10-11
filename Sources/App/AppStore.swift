@@ -11,6 +11,7 @@ final class AppStore: ObservableObject {
     @Published var errorMessage: String?
     @Published var showingSettings = false
     @Published var displayPreferences = DisplayPreferences()
+    @Published var windowBadgeStatus = "Off"
     let stateDirectory: URL
     private var polling = false
     private var timer: Timer?
