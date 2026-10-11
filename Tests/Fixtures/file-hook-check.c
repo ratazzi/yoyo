@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,11 @@ static void check_icu(void) {
 }
 
 int main(void) {
+    // setlocale opens relative locale paths while holding libc's locale lock.
+    // Filesystem hooks must not reenter localeconv through printf formatting.
+    assert(setlocale(LC_ALL, "en_US.UTF-8"));
+    assert(localeconv()->decimal_point[0] == '.');
+    assert(setlocale(LC_ALL, "C"));
     check_icu();
     assert(syscall(SYS_getpid) == getpid());
     char directory[] = "/private/tmp/timezone-files-XXXXXX";

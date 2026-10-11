@@ -79,17 +79,23 @@ BOOL tz_control_listen(NSString *path, uid_t owner, TZControlHandler handler, NS
         for (;;) {
             int client = accept(server, NULL, NULL);
             if (client < 0) { if (errno == EINTR) continue; break; }
+            int noSignal = 1;
+            if (setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal))) { close(client); continue; }
+            // Capture credentials before handing off: the peer may close while
+            // the worker waits for CPU or the daemon's engine queue.
+            uid_t uid; gid_t gid; pid_t pid = -1; socklen_t size = sizeof(pid);
+            audit_token_t audit; socklen_t auditSize = sizeof(audit);
+            if (getpeereid(client, &uid, &gid) || getsockopt(client, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) ||
+                getsockopt(client, SOL_LOCAL, LOCAL_PEERTOKEN, &audit, &auditSize) || auditSize != sizeof(audit)) {
+                close(client); continue;
+            }
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
                 @autoreleasepool {
                     struct timeval timeout = {.tv_sec = 1};
                     setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
                     setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-                    int noSignal = 1; setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
-                    uid_t uid; gid_t gid; pid_t pid = -1; socklen_t size = sizeof(pid);
-                    if (!getpeereid(client, &uid, &gid) && !getsockopt(client, SOL_LOCAL, LOCAL_PEERPID, &pid, &size)) {
-                        NSDictionary *request = read_message(client);
-                        if (request) send_message(client, handler(request, pid, uid) ?: @{});
-                    }
+                    NSDictionary *request = read_message(client);
+                    if (request) send_message(client, handler(request, pid, uid, audit) ?: @{});
                     close(client);
                 }
             });

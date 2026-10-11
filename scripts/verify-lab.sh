@@ -5,6 +5,8 @@ lab_bin="$PWD/build/TimezoneLab.app/Contents/Resources/bin"
 lab_library="$PWD/build/TimezoneLab.app/Contents/Resources/libenforced.dylib"
 lab_daemon="$PWD/build/TimezoneLab.app/Contents/Library/LaunchServices/TimezoneLabDaemon.app/Contents/MacOS/timezone-es-daemon"
 mkdir -p build/evidence
+/usr/bin/clang -ISources/Injection Tests/Integration/trace-handshake.c Sources/Injection/runtime-trace.c -o build/trace-handshake
+build/trace-handshake > build/evidence/trace-handshake.txt
 "$lab_daemon" --self-test > build/evidence/stack-self-test.txt
 cp "$lab_bin/timezone-probe" build/unselected-timezone-probe
 /usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \

@@ -23,6 +23,19 @@ const char *timezone_files_path(void) { return zone_file[0] ? zone_file : NULL; 
     }
 
 static _Thread_local int probing_alias;
+// Called from libc's open hooks, including while setlocale holds its lock.
+// printf formatting can acquire that same lock even for a plain "%s/%s".
+static int join_path(char *result, size_t capacity, const char *parent, const char *child) {
+    size_t parent_length = strnlen(parent, capacity);
+    if (parent_length >= capacity || capacity - parent_length < 2) return 0;
+    size_t child_length = strnlen(child, capacity - parent_length - 1);
+    if (child_length >= capacity - parent_length - 1) return 0;
+    memcpy(result, parent, parent_length);
+    result[parent_length] = '/';
+    memcpy(result + parent_length + 1, child, child_length + 1);
+    return 1;
+}
+
 static int localtime_path_impl(int directory, const char *path, int follow_alias, unsigned depth) {
     if (!zone_file[0] || !path || !*path) return 0;
     if (!strcmp(path, "/etc/localtime") || !strcmp(path, "/private/etc/localtime")) return 1;
@@ -35,7 +48,7 @@ static int localtime_path_impl(int directory, const char *path, int follow_alias
         if (directory == AT_FDCWD) {
             if (!getcwd(base, sizeof(base))) return 0;
         } else if (fcntl(directory, F_GETPATH, base) < 0) return 0;
-        if (snprintf(absolute, sizeof(absolute), "%s/%s", base, path) >= (int)sizeof(absolute)) return 0;
+        if (!join_path(absolute, sizeof(absolute), base, path)) return 0;
     }
     char parent[PATH_MAX];
     strlcpy(parent, absolute, sizeof(parent));
@@ -54,7 +67,7 @@ static int localtime_path_impl(int directory, const char *path, int follow_alias
     target[count] = 0;
     if (target[0] == '/') return localtime_path_impl(AT_FDCWD, target, 1, depth + 1);
     char combined[PATH_MAX];
-    if (snprintf(combined, sizeof(combined), "%s/%s", parent, target) >= (int)sizeof(combined)) return 0;
+    if (!join_path(combined, sizeof(combined), parent, target)) return 0;
     return localtime_path_impl(AT_FDCWD, combined, 1, depth + 1);
 }
 static int match_path(int directory, const char *path, int follow_alias) {

@@ -137,6 +137,7 @@ static NSDictionary *public_record(NSDictionary *record) {
     return @{@"pid": record[@"pid"], @"pidversion": record[@"pidversion"], @"parent_pid": record[@"parent_pid"],
         @"path": record[@"path"], @"session": session.identifier, @"rule_id": session.ruleID,
         @"mode": session.mode, @"zone": [session.mode isEqual:@"fixed"] ? session.zone : @"", @"loaded": record[@"loaded"] ?: @NO,
+        @"confirmation": ![session.mode isEqual:@"fixed"] ? @"not_requested" : ([record[@"loaded"] boolValue] ? @"confirmed" : @"unconfirmed"),
         @"logging": @([policy loggingEnabledForSession:session]),
         @"started_at": @([record[@"start_sec"] doubleValue] + [record[@"start_usec"] doubleValue] / 1e6)};
 }
@@ -418,15 +419,30 @@ static void process_message(const es_message_t *message) {
     }
     log_event(record, @"file", @{@"operation": operation, @"file": path ?: @"", @"destination": destination ?: @""});
 }
-static NSDictionary *control(NSDictionary *request, pid_t pid, uid_t uid) {
+static NSDictionary *control(NSDictionary *request, pid_t pid, uid_t uid, audit_token_t audit) {
     NSString *command = request[@"command"];
     if ([command isEqual:@"trace"]) {
-        for (NSMutableDictionary *record in records.allValues) {
+        // A fork record and its exec replacement can temporarily share PID/session.
+        // A constructor acknowledgement belongs only to the peer's exec generation.
+        NSMutableDictionary *record = records[key(audit)];
+        if (record) {
             TZSession *session = record[@"session"];
-            if ([record[@"pid"] intValue] != pid || [record[@"uid"] unsignedIntValue] != uid || ![session.identifier isEqual:request[@"session"]]) continue;
+            if ([record[@"pid"] intValue] != pid || [record[@"uid"] unsignedIntValue] != uid || ![session.identifier isEqual:request[@"session"]]) return @{@"error": @"Unknown process session"};
             NSString *operation = request[@"operation"];
-            if (![operation isKindOfClass:NSString.class] || operation.length > 80) break;
-            if ([operation isEqual:@"hooks_loaded"]) { record[@"loaded"] = @YES; publish(); }
+            if (![operation isKindOfClass:NSString.class] || operation.length > 80) return @{@"error": @"Invalid operation"};
+            if ([operation isEqual:@"hooks_loaded"]) {
+                NSString *receipt = request[@"receipt"];
+                if (receipt && (![receipt isKindOfClass:NSString.class] || receipt.length != 32 ||
+                    [receipt rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location != NSNotFound))
+                    return @{@"error": @"Invalid receipt"};
+                // Replays from this same audit generation are acknowledgements,
+                // not new launches or duplicate log events.
+                if (![record[@"loaded"] boolValue]) {
+                    record[@"loaded"] = @YES; persist(); publish();
+                    log_event(record, @"timezone", @{@"operation": operation, @"zone": session.zone ?: @""});
+                }
+                return receipt ? @{@"ack": receipt} : @{@"ok": @YES};
+            }
             log_event(record, @"timezone", @{@"operation": operation, @"zone": session.zone ?: @""});
             return @{@"ok": @YES};
         }
@@ -467,10 +483,49 @@ static NSDictionary *control(NSDictionary *request, pid_t pid, uid_t uid) {
     }
     return @{@"state": [state copy], @"policy": policy.dictionary, @"prompts": prompts, @"processes": processes, @"events": events};
 }
+static void test_startup_confirmation(void) {
+    char temporary[] = "/private/tmp/timezone-confirm-XXXXXX";
+    if (!mkdtemp(temporary)) throw std::runtime_error("cannot create confirmation test directory");
+    directory = @(temporary); owner = getuid();
+    state = [NSMutableDictionary new]; records = [NSMutableDictionary new]; pending = [NSMutableDictionary new]; recent = [NSMutableArray new];
+    policy = [TZProgramPolicy policyWithDictionary:@{@"version": @2, @"es_enabled": @YES, @"rules": @[
+        @{@"id": @"test", @"kind": @"cli", @"pattern": @"/test", @"mode": @"fixed", @"zone": @"Asia/Tokyo", @"enabled": @YES, @"logging": @YES}
+    ]} error:nil];
+    TZSession *session = [policy decisionForPath:@"/test" invokedPath:nil script:nil parent:nil].session;
+    audit_token_t audit = {}; audit.val[5] = (uint32_t)getpid(); audit.val[7] = 2;
+    NSMutableDictionary *record = [@{@"pid": @(getpid()), @"pidversion": @2, @"uid": @(owner), @"parent_pid": @1,
+        @"path": @"/test", @"session": session, @"loaded": @NO, @"start_sec": @1, @"start_usec": @0} mutableCopy];
+    audit_token_t previous = audit; previous.val[7] = 1;
+    NSMutableDictionary *old = [record mutableCopy]; old[@"pidversion"] = @1;
+    records[key(previous)] = old; records[key(audit)] = record;
+    NSString *receipt = @"0123456789abcdef0123456789abcdef";
+    NSMutableDictionary *request = [@{@"command": @"trace", @"operation": @"hooks_loaded", @"session": session.identifier, @"receipt": receipt} mutableCopy];
+    BOOL valid = policy && session && [public_record(record)[@"confirmation"] isEqual:@"unconfirmed"];
+    request[@"receipt"] = @"invalid";
+    valid &= control(request, getpid(), owner, audit)[@"error"] != nil && ![record[@"loaded"] boolValue];
+    request[@"receipt"] = receipt;
+    valid &= control(request, getpid(), owner + 1, audit)[@"error"] != nil;
+    audit_token_t unknown = audit; unknown.val[7] = 3;
+    valid &= control(request, getpid(), owner, unknown)[@"error"] != nil;
+    request[@"session"] = @"wrong-session";
+    valid &= control(request, getpid(), owner, audit)[@"error"] != nil;
+    request[@"session"] = session.identifier;
+    valid &= [control(request, getpid(), owner, audit)[@"ack"] isEqual:receipt];
+    valid &= [record[@"loaded"] boolValue] && ![old[@"loaded"] boolValue] && [public_record(record)[@"confirmation"] isEqual:@"confirmed"];
+    NSUInteger logged = recent.count;
+    for (int attempt = 0; attempt < 5; attempt++) valid &= [control(request, getpid(), owner, audit)[@"ack"] isEqual:receipt];
+    valid &= logged == 1 && recent.count == logged;
+    NSArray *saved = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:@"active-sessions.json"]] options:0 error:nil];
+    valid &= saved.count == 2;
+    [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
+    if (!valid) throw std::runtime_error("startup confirmation validation failed");
+    puts("Startup confirmation: exact audit generation, receipt validation, idempotence and unknown state: PASS");
+}
+
 int main(int argc, const char **argv) {
     @autoreleasepool {
         if (argc == 2 && !strcmp(argv[1], "--self-test")) {
-            try { test_startup_stack_rewrite(); puts("startup stack preservation: PASS"); return 0; }
+            try { test_startup_stack_rewrite(); puts("startup stack preservation: PASS"); test_startup_confirmation(); return 0; }
             catch (const std::exception &e) { fprintf(stderr, "%s\n", e.what()); return 1; }
         }
         if (argc != 2) return 2;
@@ -501,9 +556,9 @@ int main(int argc, const char **argv) {
         policy = [TZProgramPolicy policyWithDictionary:configuration error:nil]; if (!policy) return 2;
         restore(); reload_policy(); publish();
         NSError *error;
-        if (!tz_control_listen(socketPath, owner, ^NSDictionary *(NSDictionary *request, pid_t pid, uid_t uid) {
+        if (!tz_control_listen(socketPath, owner, ^NSDictionary *(NSDictionary *request, pid_t pid, uid_t uid, audit_token_t audit) {
             __block NSDictionary *reply;
-            dispatch_sync(engineQueue, ^{ reply = control(request, pid, uid); }); return reply;
+            dispatch_sync(engineQueue, ^{ reply = control(request, pid, uid, audit); }); return reply;
         }, &error)) { fprintf(stderr, "%s\n", error.localizedDescription.UTF8String); return 1; }
         es_new_client_result_t result = es_new_client(&client, ^(es_client_t *es, const es_message_t *message) {
             es_retain_message(message);

@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import Darwin
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -86,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 @main
 struct TimezoneLabApp {
     @MainActor static func main() {
+        if let status = ProcessInspector.run(arguments: CommandLine.arguments) { exit(status) }
         let app = NSApplication.shared; app.setActivationPolicy(.accessory)
         let delegate = AppDelegate(); app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }

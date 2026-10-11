@@ -68,6 +68,16 @@ zsh scripts/verify-rules.sh
 
 Live acceptance requires the signed ES service, its permissions, and the existing Tokyo rules for the test fixtures and `/bin/date`. The rules acceptance driver temporarily changes the policy and restores it on completion; it also briefly exercises the global default.
 
+To test a real Terminal process chain, configure a fixed time zone for Terminal, build the signed app, enable ES, then launch an independent Terminal instance:
+
+```sh
+open -n -a /System/Applications/Utilities/Terminal.app "$PWD/scripts/terminal-chain-test.command"
+```
+
+The test checks confirmed injection and a shared launch session through 1, 3 and 8 nested bash processes, including 8 layers with an empty environment and a conflicting `TZ`. It runs the original `/bin/date`, temporarily disables only exact date rules to isolate inheritance, then restores them to check explicit child precedence. Cleanup restores the tagged rules without replacing unrelated settings. Avoid editing date rules during the test. Reports and per-process metadata are saved under `build/terminal-chain.*`; `build/terminal-chain-last-run` identifies the latest run. The signed app also provides a read-only `--inspect-process PID` diagnostic.
+
+Startup confirmation uses a random receipt bound to the socket peer's kernel audit generation. Retries reuse that receipt and do not duplicate confirmation logs. The constructor makes up to five attempts within a 500ms total budget, normally returning as soon as the daemon acknowledges. Process diagnostics distinguish `confirmed`, `unconfirmed` and `not_requested`; an exhausted budget does not mean injection failed. A request already received by the daemon can still confirm later. Ordinary timezone-call logs are best effort and do not wait for replies. The verification suite covers delayed handling, lost and invalid replies, fragmentation, signal interruption, unavailable services and bounded timeouts.
+
 ## Scope
 
 Validated on this SIP-disabled Apple Silicon host: original system `/bin/date`, empty-environment CLI launches, 80 concurrent startup checks, application subdirectories, child overrides, global defaults and system exclusions. This remains an experimental app: arbitrary protected processes, Rosetta and shared XPC chains are not universally guaranteed. Launcher mode without ES is deferred. Production installation/permission hardening and lossless auditing are unfinished. See [Running](docs/Running.md) and [archived feasibility evidence](docs/research/feasibility.md).

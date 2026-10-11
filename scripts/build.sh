@@ -33,6 +33,7 @@ build/window-badge-tests
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
 /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "$lab_resources/bin/cli-start-paths"
 /usr/bin/clang -Wno-deprecated-declarations Tests/Fixtures/file-hook-check.c -o "$lab_resources/bin/file-hook-check"
+/usr/bin/clang -fobjc-arc -framework Foundation Tests/Integration/terminal-chain-policy.m -o build/terminal-chain-policy
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -arch arm64 -arch arm64e -dynamiclib -framework Foundation -framework CoreFoundation -licucore Sources/Injection/enforced.m Sources/Injection/timezone-files.c Sources/Injection/runtime-trace.c -o "$lab_resources/libenforced.dylib"
 cp Resources/Info.plist "$lab_app/Contents/Info.plist"
 cat > "$lab_helper/Contents/Info.plist" <<'PLIST'

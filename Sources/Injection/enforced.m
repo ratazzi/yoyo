@@ -182,7 +182,7 @@ __attribute__((constructor)) static void install_hooks(void) {
         original_string_resolve = method_setImplementation(stringResolve, (IMP)forced_string_resolve);
         timezone_trace_configure();
         atomic_store_explicit(&hooks_installed, 1, memory_order_release);
-        timezone_trace_call("hooks_loaded", forced_name);
+        timezone_trace_startup(forced_name);
         if (getenv("TIMEZONE_LAB_VERBOSE")) fprintf(stderr, "[timezone hooks] installed for %s\n", forced_name);
     }
 }

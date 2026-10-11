@@ -1,0 +1,105 @@
+#!/bin/bash
+set -uo pipefail
+CHAIN_SCRIPT="${BASH_SOURCE[0]}"
+case "$CHAIN_SCRIPT" in /*) ;; *) CHAIN_SCRIPT="$PWD/$CHAIN_SCRIPT" ;; esac
+CHAIN_ROOT="${CHAIN_SCRIPT%/scripts/*}"
+CHAIN_APP="$CHAIN_ROOT/build/TimezoneLab.app/Contents/MacOS/TimezoneLab"
+CHAIN_HELPER="$CHAIN_ROOT/build/terminal-chain-policy"
+
+verify_process() {
+    local pid="$1" record="$2" zone="$3" session="$4" attempt loaded
+    for ((attempt=0; attempt<10; attempt++)); do
+        "$CHAIN_APP" --inspect-process "$pid" > "$record" || return 1
+        loaded=$("$CHAIN_HELPER" field "$record" loaded) || return 1
+        [[ "$loaded" == 1 ]] && break
+        /bin/sleep 0.05
+    done
+    "$CHAIN_HELPER" verify "$record" "$zone" "$session"
+}
+
+if [[ "${1:-}" == "--layer" ]]; then
+    chain_case="$2"; remaining="$3"; expected="$4"; zone="$5"; session="$6"; output="$7"
+    printf 'case=%s depth=%s pid=%s ppid=%s TZ=%s\n' "$chain_case" "$remaining" "$$" "$PPID" "${TZ:-<unset>}"
+    verify_process "$$" "$output/$chain_case-layer-$remaining.json" "$zone" "$session" || exit 1
+    if (( remaining > 0 )); then
+        if [[ "$chain_case" == "empty-env" ]]; then
+            /usr/bin/env -i PATH=/usr/bin:/bin TZ=Etc/UTC /bin/bash --noprofile --norc -c 'source "$1" --layer "$2" "$3" "$4" "$5" "$6" "$7"' _ "$CHAIN_SCRIPT" "$chain_case" "$((remaining-1))" "$expected" "$zone" "$session" "$output"
+        else
+            /bin/bash --noprofile --norc -c 'source "$1" --layer "$2" "$3" "$4" "$5" "$6" "$7"' _ "$CHAIN_SCRIPT" "$chain_case" "$((remaining-1))" "$expected" "$zone" "$session" "$output"
+        fi
+        result=$?
+        printf 'return case=%s depth=%s pid=%s status=%s\n' "$chain_case" "$remaining" "$$" "$result"
+        exit "$result"
+    fi
+    actual=$(/usr/bin/env -i PATH=/usr/bin:/bin TZ=Etc/UTC /bin/date '+%Z %z') || exit 1
+    printf 'DATE case=%s actual="%s" expected_offset=%s\n' "$chain_case" "$actual" "$expected"
+    printf '%s\n' "$actual" > "$output/$chain_case-date.txt"
+    [[ "$actual" == *" $expected" ]] || exit 1
+    exit 0
+fi
+
+mkdir -p "$CHAIN_ROOT/build"
+if ! mkdir "$CHAIN_ROOT/build/terminal-chain-test.lock" 2>/dev/null; then
+    printf 'Another chain test is running; no settings changed.\n'; exit 2
+fi
+CHAIN_OUTPUT=$(mktemp -d "$CHAIN_ROOT/build/terminal-chain.XXXXXX") || { rmdir "$CHAIN_ROOT/build/terminal-chain-test.lock"; exit 2; }
+CHAIN_POLICY="$CHAIN_ROOT/build/state/policy.json"
+CHAIN_BACKUP="$CHAIN_OUTPUT/date-rule-backup.json"
+printf '%s\n' "$CHAIN_OUTPUT" > "$CHAIN_ROOT/build/terminal-chain-last-run"
+exec > >(/usr/bin/tee "$CHAIN_OUTPUT/output.txt") 2>&1
+cleanup() {
+    result=$?
+    if [[ -f "$CHAIN_BACKUP" ]]; then
+        "$CHAIN_HELPER" restore "$CHAIN_POLICY" "$CHAIN_BACKUP" || result=1
+        /bin/sleep 2.1
+    fi
+    rmdir "$CHAIN_ROOT/build/terminal-chain-test.lock" 2>/dev/null || true
+    printf 'RESULT=%s\nREPORT_DIR=%s\n' "$([[ "$result" == 0 ]] && printf PASS || printf FAIL)" "$CHAIN_OUTPUT"
+    printf '%s\n' "$result" > "$CHAIN_OUTPUT/exit-status.txt"
+    trap - EXIT
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+[[ -x "$CHAIN_APP" && -x "$CHAIN_HELPER" ]] || { printf 'Build the application and terminal-chain-policy helper first.\n'; exit 2; }
+
+printf 'Terminal.app process-chain test. Each bash is a distinct process; /bin/date receives an empty environment plus TZ=Etc/UTC.\n'
+ancestor="$PPID"; terminal_record=""
+for ((i=0; i<32 && ancestor>1; i++)); do
+    record="$CHAIN_OUTPUT/ancestor-$ancestor.json"
+    "$CHAIN_APP" --inspect-process "$ancestor" > "$record" || true
+    executable=$("$CHAIN_HELPER" field "$record" path 2>/dev/null) || executable=""
+    if [[ "$executable" == */Terminal.app/Contents/MacOS/Terminal ]]; then terminal_record="$record"; break; fi
+    ancestor=$(/bin/ps -p "$ancestor" -o ppid= | /usr/bin/tr -d ' ') || break
+    [[ "$ancestor" =~ ^[0-9]+$ ]] || break
+done
+[[ -n "$terminal_record" ]] || { printf 'No tracked Terminal.app ancestor. Start Terminal after configuring its fixed time zone, then run this script in Terminal.\n'; exit 2; }
+zone=$("$CHAIN_HELPER" field "$terminal_record" zone) || exit 2
+session=$("$CHAIN_HELPER" field "$terminal_record" session) || exit 2
+[[ -n "$zone" ]] || { printf 'Terminal has no fixed launch session.\n'; exit 2; }
+terminal_pid=$("$CHAIN_HELPER" field "$terminal_record" pid) || exit 2
+verify_process "$terminal_pid" "$terminal_record" "$zone" "$session" || exit 1
+expected=$("$CHAIN_HELPER" offset "$zone") || exit 2
+printf 'TERMINAL zone=%s expected_offset=%s session=%s\n' "$zone" "$expected" "$session"
+cat "$terminal_record"
+printf 'RUNNER pid=%s TZ=%s PROCESS_TIMEZONE=%s session=%s\n' "$$" "${TZ:-<unset>}" "${PROCESS_TIMEZONE:-<unset>}" "${TIMEZONE_LAB_SESSION:-<unset>}"
+verify_process "$$" "$CHAIN_OUTPUT/runner.json" "$zone" "$session" || exit 1
+"$CHAIN_HELPER" backup "$CHAIN_POLICY" "$CHAIN_BACKUP" || exit 2
+printf '\nTemporarily disabling only exact /bin/date rules to isolate inheritance.\n'
+"$CHAIN_HELPER" disable "$CHAIN_POLICY" "$CHAIN_BACKUP" || exit 2
+/bin/sleep 2.1
+for layers in 1 3 8; do
+    /bin/bash --noprofile --norc -c 'source "$1" --layer "$2" "$3" "$4" "$5" "$6" "$7"' _ "$CHAIN_SCRIPT" "nested-$layers" "$((layers-1))" "$expected" "$zone" "$session" "$CHAIN_OUTPUT" || exit 1
+done
+/usr/bin/env -i PATH=/usr/bin:/bin TZ=Etc/UTC /bin/bash --noprofile --norc -c 'source "$1" --layer "$2" "$3" "$4" "$5" "$6" "$7"' _ "$CHAIN_SCRIPT" empty-env 7 "$expected" "$zone" "$session" "$CHAIN_OUTPUT" || exit 1
+printf '\nInheritance checks passed. Restoring the original /bin/date rule.\n'
+"$CHAIN_HELPER" restore "$CHAIN_POLICY" "$CHAIN_BACKUP" || exit 1
+/bin/sleep 2.1
+explicit_zone=$("$CHAIN_HELPER" date-zone "$CHAIN_BACKUP") || explicit_zone=""
+if [[ -n "$explicit_zone" ]]; then
+    explicit_offset=$("$CHAIN_HELPER" offset "$explicit_zone") || exit 1
+    printf '\nExplicit child rule: date zone=%s offset=%s, parent bash zone=%s\n' "$explicit_zone" "$explicit_offset" "$zone"
+    /usr/bin/env -i PATH=/usr/bin:/bin TZ=Etc/UTC /bin/bash --noprofile --norc -c 'source "$1" --layer "$2" "$3" "$4" "$5" "$6" "$7"' _ "$CHAIN_SCRIPT" explicit-child 7 "$explicit_offset" "$zone" "$session" "$CHAIN_OUTPUT" || exit 1
+fi
+exit 0
