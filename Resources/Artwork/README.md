@@ -1,5 +1,5 @@
 # Dock artwork
 
-`DockFlipClock-source.png` preserves the full generated pixel flip-clock concept on warm paper. The illustrated 09:41 is static artwork, independent of the optional live Dock clock.
+`DockFlipClock-source.png` preserves the generated concept as a style reference only. It is not loaded by the app or the icon build.
 
-`scripts/render-app-icons.swift` trims 13% from each source edge, clips it to a clean rounded tile, and renders it at 86% of the canvas. This enlarges the illustrated clock by about 19% compared with the original 6% trim, while keeping the paper tile the same size. It regenerates the full macOS iconset and 1024px master during builds. The menu bar keeps a separate transparent monochrome template at 18pt; it does not reuse the paper tile.
+`Sources/App/TimezoneArtwork.swift` draws the warm white tile, stepped flip panels, pedestal and custom bitmap digits with AppKit on a 64-unit grid. The paper tile occupies 86% of the canvas; the clock occupies about 84%. Static artwork uses 09:41, independent of the optional live clock. Both the running Dock icon and `scripts/render-app-icons.swift` use this renderer. Builds generate all macOS iconset sizes and a 1024px master directly from code. The menu bar keeps a separate transparent monochrome template at 18pt.

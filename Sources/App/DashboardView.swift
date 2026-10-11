@@ -106,6 +106,11 @@ struct DashboardView: View {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: .init("FocusProgramSearch"))) { _ in searchFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .init("EditProgramRule"))) { notification in
+            guard !store.showingSettings, editingRule == nil,
+                  let id = notification.object as? String else { return }
+            editingRule = store.policy.rules.first { $0.id == id }
+        }
     }
 
     private var matchingRecent: [RecentApp] {

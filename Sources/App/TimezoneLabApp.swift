@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var activePromptID: String?
     private var observation: AnyCancellable?
     private var statusDisplay: StatusDisplayController?
+    private var statusMenu: StatusMenuController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
@@ -23,9 +24,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Timezone Lab", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
-        item.menu = menu
+        statusMenu = StatusMenuController(store: store, applicationMenu: menu) { [weak self] rule in
+            self?.showMain()
+            NotificationCenter.default.post(name: .init("EditProgramRule"), object: rule.id)
+        }
+        item.menu = statusMenu?.menu
         statusDisplay = StatusDisplayController(store: store, item: item)
-        let appMenu = NSMenu(); let parent = NSMenuItem(); parent.submenu = menu.copy() as? NSMenu; appMenu.addItem(parent)
+        let appMenu = NSMenu(); let parent = NSMenuItem()
+        let applicationMenu = menu.copy() as! NSMenu
+        let timeZones = NSMenuItem(title: "Time Zones", action: #selector(showTimeZones), keyEquivalent: "")
+        timeZones.target = self; applicationMenu.insertItem(timeZones, at: 0)
+        applicationMenu.insertItem(.separator(), at: 1)
+        parent.submenu = applicationMenu; appMenu.addItem(parent)
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         let editMenu = NSMenu(title: "Edit")
         for (title, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
@@ -45,6 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         showMain()
     }
     @objc func showMain() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
+    @objc func showTimeZones() {
+        // Open the actual status-item menu after the application menu finishes tracking.
+        DispatchQueue.main.async { [weak self] in
+            guard let button = self?.item.button, let menu = self?.item.menu else { return }
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY - 2), in: button)
+        }
+    }
     @objc func showSettings() { showMain(); store.showingSettings = true }
     @objc func focusSearch() { showMain(); NotificationCenter.default.post(name: .init("FocusProgramSearch"), object: nil) }
     @objc func quitApp() { NSApp.terminate(nil) }

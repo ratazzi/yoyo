@@ -10,7 +10,7 @@ final class StatusDisplayController {
     private var subscription: AnyCancellable?
     private var timer: Timer?
     private let dockView = DockClockView()
-    private let dockIconView = NSImageView()
+    private let dockIconView = DockArtworkView()
     private let menuImage: NSImage?
     private var lastDockKey: String?
 
@@ -19,10 +19,9 @@ final class StatusDisplayController {
         menuImage = Bundle.main.url(forResource: "MenuBarTemplate", withExtension: "png").flatMap { NSImage(contentsOf: $0) }
             ?? NSImage(systemSymbolName: "globe", accessibilityDescription: "Timezone Lab")
         menuImage?.size = NSSize(width: 18, height: 18); menuImage?.isTemplate = true
-        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"), let icon = NSImage(contentsOf: url) {
+        if let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String,
+           let url = Bundle.main.url(forResource: name, withExtension: nil), let icon = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = icon
-            dockIconView.image = icon
-            dockIconView.imageScaling = .scaleProportionallyUpOrDown
         }
         subscription = store.$policy.combineLatest(store.$displayPreferences).sink { [weak self] policy, preferences in
             guard let self else { return }
@@ -64,6 +63,13 @@ final class StatusDisplayController {
         } else { NSApp.dockTile.contentView = nil }
         NSApp.dockTile.badgeLabel = nil
         NSApp.dockTile.display()
+    }
+}
+
+@MainActor
+private final class DockArtworkView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        TimezoneArtwork.flipClock(in: bounds)
     }
 }
 

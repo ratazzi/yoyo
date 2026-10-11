@@ -69,6 +69,7 @@ struct SettingsView: View {
     @State private var zone = "Asia/Tokyo"
     @State private var validation: String?
     @State private var display = DisplayPreferences()
+    @State private var favoriteZone = "Asia/Tokyo"
     @State private var clockFactory = ClockPresentationFactory()
 
     var body: some View {
@@ -84,6 +85,30 @@ struct SettingsView: View {
                     }
                     if defaultMode == "fixed" { TimeZoneField(selection: $zone).frame(height: 26) }
                     Text("Applies to every new program without a matching rule. A System Default rule excludes a program from injection.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }.padding(18)
+            }
+            Surface {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Favorite Time Zones").fontWeight(.semibold)
+                    ForEach(display.favoriteTimeZones, id: \.self) { identifier in
+                        HStack {
+                            Text(identifier.replacingOccurrences(of: "_", with: " "))
+                            Spacer()
+                            Button { display.favoriteTimeZones.removeAll { $0 == identifier } } label: {
+                                Image(systemName: "minus.circle")
+                            }.buttonStyle(.plain).help("Remove favorite")
+                        }
+                    }
+                    HStack {
+                        TimeZoneField(selection: $favoriteZone).frame(height: 26)
+                        Button("Add") {
+                            if TimeZone(identifier: favoriteZone) != nil && !display.favoriteTimeZones.contains(favoriteZone) {
+                                display.favoriteTimeZones.append(favoriteZone)
+                            }
+                        }.disabled(TimeZone(identifier: favoriteZone) == nil || display.favoriteTimeZones.contains(favoriteZone))
+                    }
+                    Text("Choose a favorite from the menu bar to change the default for new launches.")
                         .font(.callout).foregroundStyle(.secondary)
                 }.padding(18)
             }

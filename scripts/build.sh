@@ -9,7 +9,9 @@ lab_helper="$lab_app/Contents/Library/LaunchServices/TimezoneLabDaemon.app"
 mkdir -p "$lab_resources/bin" "$lab_app/Contents/MacOS" "$lab_helper/Contents/MacOS" "$lab_app/Contents/Library/LaunchDaemons" build/state
 /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/render-app-icons.swift -framework AppKit -o build/render-app-icons
 build/render-app-icons build/icon-assets
-/usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "$lab_resources/AppIcon.icns"
+/usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "$lab_resources/TimezoneLabFlipClock.icns"
+# Remove the superseded generated resource from incremental builds.
+rm -f "$lab_resources/AppIcon.icns"
 cp build/icon-assets/MenuBarTemplate.png "$lab_resources/MenuBarTemplate.png"
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/program-policy.m -o build/program-policy.o
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/control-channel.m -o build/control-channel.o
@@ -21,8 +23,10 @@ cp build/icon-assets/MenuBarTemplate.png "$lab_resources/MenuBarTemplate.png"
 build/policy-tests
 /usr/bin/swiftc -parse-as-library Sources/App/RecentApps.swift Tests/Unit/recent-apps-tests.swift -o build/recent-apps-tests
 build/recent-apps-tests
-/usr/bin/swiftc -parse-as-library -import-objc-header Sources/Shared/timezone-display.h -licucore Sources/App/Models.swift Sources/App/DisplayPreferences.swift Tests/Unit/display-preferences-tests.swift build/timezone-display.o -o build/display-preferences-tests
+/usr/bin/swiftc -parse-as-library -import-objc-header Sources/Shared/timezone-display.h -licucore Sources/App/Models.swift Sources/App/DisplayPreferences.swift Sources/App/MenuProgramOverrides.swift Sources/App/MenuTimeZone.swift Tests/Unit/display-preferences-tests.swift build/timezone-display.o -o build/display-preferences-tests
 build/display-preferences-tests
+/usr/bin/swiftc -parse-as-library -framework AppKit Sources/App/MenuProgramRow.swift Tests/Unit/menu-program-row-tests.swift -o build/menu-program-row-tests
+build/menu-program-row-tests
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "$lab_resources/bin/timezone-probe"
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
 /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "$lab_resources/bin/cli-start-paths"

@@ -20,15 +20,36 @@ struct DisplayPreferencesTests {
         assert(!clock.make(policy: policy, preferences: preferences, date: winter, system: TimeZone(identifier: "Etc/UTC")!).matchesSystem)
         policy.default_zone = "America/New_York"
         let summer = Date(timeIntervalSince1970: 1719835200) // 2024-07-01 12:00 UTC
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: winter) == "UTC−5")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: summer) == "UTC−4")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Tokyo")!, at: summer) == "UTC+9")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Kathmandu")!, at: summer) == "UTC+5:45")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Australia/Adelaide")!, at: summer) == "UTC+9:30")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Etc/UTC")!, at: summer) == "UTC+0")
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "08:00")
         preferences.use24HourTime = false; preferences.showSeconds = true
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "8:00:00 AM")
         policy.default_zone = "America/Argentina/Buenos_Aires"
         assert(clock.make(policy: policy, preferences: preferences, date: epoch, system: system).city == "Buenos Aires")
         preferences.showDockIcon = true; preferences.dockContent = .city
+        preferences.favoriteTimeZones = ["Asia/Hong_Kong", "Etc/UTC"]
         let restored = try JSONDecoder().decode(DisplayPreferences.self, from: JSONEncoder().encode(preferences))
         let defaults = try JSONDecoder().decode(DisplayPreferences.self, from: Data("{}".utf8))
         assert(restored == preferences && defaults == DisplayPreferences())
+        var menuPolicy = PolicyDocument()
+        menuPolicy.default_mode = "fixed"; menuPolicy.default_zone = "Asia/Tokyo"
+        var same = ProgramRule(); same.name = "Same"; same.mode = "fixed"; same.zone = "Japan"
+        var app = ProgramRule(); app.name = "Running"; app.kind = "app"; app.pattern = "/Applications/Test.app"; app.mode = "fixed"; app.zone = "Europe/London"
+        var excluded = ProgramRule(); excluded.name = "Excluded"; excluded.mode = "default"
+        var disabled = app; disabled.id = "disabled"; disabled.enabled = false
+        var ask = ProgramRule(); ask.name = "Ask"; ask.mode = "ask"
+        menuPolicy.rules = [same, app, excluded, disabled, ask]
+        let rows = MenuProgramOverrides.rows(policy: menuPolicy, runningAppPaths: [app.pattern], system: system, clock: clock)
+        assert(rows.map { $0.rule.name } == ["Running", "Ask", "Excluded"])
+        assert(rows[0].running && !rows[1].running && !rows[2].running)
+        menuPolicy.default_mode = "system"
+        assert(!MenuProgramOverrides.rows(policy: menuPolicy, runningAppPaths: [], system: system, clock: clock).contains { $0.rule.id == excluded.id })
         print("Clock display: system suppression, aliases, distinct DST rules, city names, formats, Dock settings and persistence: PASS")
+        print("Menu overrides: aliases, system exclusions, disabled rules, ask mode and running app priority: PASS")
     }
 }
