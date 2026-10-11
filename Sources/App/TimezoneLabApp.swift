@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var promptWindow: NSPanel?
     private var activePromptID: String?
     private var observation: AnyCancellable?
+    private var statusDisplay: StatusDisplayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
@@ -23,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Timezone Lab", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
         item.menu = menu
+        statusDisplay = StatusDisplayController(store: store, item: item)
         let appMenu = NSMenu(); let parent = NSMenuItem(); parent.submenu = menu.copy() as? NSMenu; appMenu.addItem(parent)
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         let editMenu = NSMenu(title: "Edit")
@@ -46,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func showSettings() { showMain(); store.showingSettings = true }
     @objc func focusSearch() { showMain(); NotificationCenter.default.post(name: .init("FocusProgramSearch"), object: nil) }
     @objc func quitApp() { NSApp.terminate(nil) }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMain(); return true
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     private func presentPrompt(_ prompt: LaunchPrompt?) {
         guard prompt?.id != activePromptID else { return }
         promptWindow?.orderOut(nil); promptWindow = nil; activePromptID = prompt?.id

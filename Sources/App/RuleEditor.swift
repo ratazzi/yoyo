@@ -68,10 +68,14 @@ struct SettingsView: View {
     @State private var defaultMode = "system"
     @State private var zone = "Asia/Tokyo"
     @State private var validation: String?
+    @State private var display = DisplayPreferences()
+    @State private var clockFactory = ClockPresentationFactory()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("Settings").font(.title2).fontWeight(.semibold)
+            ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
             Surface {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Default Time Zone").fontWeight(.semibold)
@@ -80,6 +84,36 @@ struct SettingsView: View {
                     }
                     if defaultMode == "fixed" { TimeZoneField(selection: $zone).frame(height: 26) }
                     Text("Applies to every new program without a matching rule. A System Default rule excludes a program from injection.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }.padding(18)
+            }
+            Surface {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Menu Bar & Dock").fontWeight(.semibold)
+                    Picker("Menu Bar", selection: $display.menuBarContent) {
+                        ForEach(ClockContent.allCases) { content in Text(content.title).tag(content) }
+                    }
+                    Toggle("Show Dock Icon", isOn: $display.showDockIcon).toggleStyle(.switch)
+                    if display.showDockIcon {
+                        Picker("Dock Content", selection: $display.dockContent) {
+                            ForEach(ClockContent.allCases) { content in Text(content.title).tag(content) }
+                        }
+                    }
+                    HStack(spacing: 22) {
+                        Toggle("24-Hour Time", isOn: $display.use24HourTime)
+                        Toggle("Show Seconds", isOn: $display.showSeconds)
+                    }.toggleStyle(.checkbox)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let preview = clockFactory.make(policy: previewPolicy, preferences: display, date: context.date)
+                        HStack {
+                            Text("Menu Bar Preview").font(.callout).foregroundStyle(.secondary)
+                            Spacer()
+                            if let label = preview.label(for: display.menuBarContent) {
+                                Text(label).monospacedDigit().lineLimit(1)
+                            } else { Image(systemName: "globe").foregroundStyle(.secondary) }
+                        }
+                    }
+                    Text("Time and city are hidden when the default matches the system time zone. The app icon stays available.")
                         .font(.callout).foregroundStyle(.secondary)
                 }.padding(18)
             }
@@ -101,6 +135,8 @@ struct SettingsView: View {
                     Text("Endpoint Security is optional. Launcher mode is not available yet.").font(.callout).foregroundStyle(.secondary)
                 }.padding(18)
             }
+            }
+            }.frame(maxHeight: 500)
             if let validation { Text(validation).foregroundStyle(.red).font(.callout) }
             HStack {
                 Button("Open Log Folder") { NSWorkspace.shared.open(store.stateDirectory) }
@@ -108,11 +144,19 @@ struct SettingsView: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
                     var candidate = store.policy; candidate.default_mode = defaultMode; candidate.default_zone = zone
-                    if store.save(candidate) { dismiss() }
+                    if store.save(candidate) && store.saveDisplayPreferences(display) { dismiss() }
                     else { validation = store.errorMessage; store.errorMessage = nil }
                 }.keyboardShortcut(.defaultAction)
             }
         }.padding(28).frame(width: 540)
-        .onAppear { defaultMode = store.policy.default_mode; zone = store.policy.default_zone.isEmpty ? "Asia/Tokyo" : store.policy.default_zone }
+        .onAppear {
+            defaultMode = store.policy.default_mode; zone = store.policy.default_zone.isEmpty ? "Asia/Tokyo" : store.policy.default_zone
+            display = store.displayPreferences
+        }
+    }
+
+    private var previewPolicy: PolicyDocument {
+        var candidate = store.policy; candidate.default_mode = defaultMode; candidate.default_zone = zone
+        return candidate
     }
 }

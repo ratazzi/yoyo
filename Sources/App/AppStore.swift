@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
     @Published var status = "Offline"
     @Published var errorMessage: String?
     @Published var showingSettings = false
+    @Published var displayPreferences = DisplayPreferences()
     let stateDirectory: URL
     private var polling = false
     private var timer: Timer?
@@ -34,6 +35,11 @@ final class AppStore: ObservableObject {
         } catch where (error as NSError).code == NSFileReadNoSuchFileError {
             // First launch starts with no rules and no background service.
         } catch { errorMessage = error.localizedDescription }
+        let displayURL = stateDirectory.appendingPathComponent("display-preferences.json")
+        if FileManager.default.fileExists(atPath: displayURL.path) {
+            do { displayPreferences = try JSONDecoder().decode(DisplayPreferences.self, from: Data(contentsOf: displayURL)) }
+            catch { errorMessage = "Could not read display preferences: \(error.localizedDescription)" }
+        }
         launchMonitor = AppLaunchMonitor(file: stateDirectory.appendingPathComponent("recent-apps.json"), onChange: { [weak self] apps in
             self?.recentApps = apps
         }, onError: { [weak self] error in self?.errorMessage = error })
@@ -118,5 +124,14 @@ final class AppStore: ObservableObject {
 
     func clearHistory() {
         launchMonitor?.clear()
+    }
+
+    @discardableResult
+    func saveDisplayPreferences(_ preferences: DisplayPreferences) -> Bool {
+        do {
+            try JSONEncoder().encode(preferences).write(to: stateDirectory.appendingPathComponent("display-preferences.json"), options: .atomic)
+            displayPreferences = preferences
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
     }
 }
