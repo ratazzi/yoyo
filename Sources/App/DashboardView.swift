@@ -16,7 +16,7 @@ struct DashboardView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
                     TextField("Search programs", text: $search).textFieldStyle(.plain).focused($searchFocused)
@@ -30,14 +30,10 @@ struct DashboardView: View {
                     Button("Add Path Pattern…") { editingRule = ProgramRule() }
                 } label: { Image(systemName: "plus").font(.title3) }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Add a program rule")
-                Divider().frame(height: 24)
-                Button { store.showingSettings = true } label: { Image(systemName: "gearshape") }
-                    .buttonStyle(.plain).help("Settings")
             }
-            .padding(.leading, 90).padding(.trailing, 20).padding(.vertical, 10)
-            Divider()
+            .padding(.horizontal, 12).padding(.top, 8)
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 14) {
                     if !store.online {
                         Surface {
                             HStack(spacing: 14) {
@@ -72,13 +68,13 @@ struct DashboardView: View {
                                 Text("For programs without a rule").font(.system(size: 11)).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(store.defaultDescription).font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text(store.defaultDescription).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                             Button("Change…") { store.showingSettings = true }
                         }.padding(12)
                     }
                     Text("Child processes inherit the launch choice unless they have their own rule.")
                         .font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 6)
-                }.padding(20)
+                }.padding(12)
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -142,12 +138,11 @@ struct DashboardView: View {
                         let visible = Array(matchingRecent.prefix(showingAllRecent ? 100 : 5))
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, launch in
                             HStack(spacing: 10) {
-                                ProgramIcon(path: launch.path, size: 22)
-                                Text(launch.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                                Text(launch.path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                                Spacer(minLength: 8)
-                                Text("\(Text(Date(timeIntervalSince1970: launch.opened_at), style: .relative)) ago")
-                                    .font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                                ProgramIcon(path: launch.path, size: 26)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(launch.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Text(launch.path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
                                 Button(existingRule(for: launch) == nil ? "Add Rule…" : "Edit Rule…") {
                                     if let existing = existingRule(for: launch) { editingRule = existing }
                                     else {
@@ -155,7 +150,7 @@ struct DashboardView: View {
                                         editingRule = rule
                                     }
                                 }.controlSize(.small)
-                            }.padding(.horizontal, 14).padding(.vertical, 8)
+                            }.padding(.horizontal, 10).padding(.vertical, 8)
                                 .help("\(launch.path) · Opened \(Date(timeIntervalSince1970: launch.opened_at).formatted())")
                             if index != visible.count - 1 { Divider().padding(.leading, 46) }
                         }
@@ -229,12 +224,11 @@ struct DashboardView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(rule.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary)
                                         Text(rule.pattern).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                                    }
-                                    Spacer(minLength: 16)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
                                     if rule.logging { Image(systemName: "doc.text").foregroundStyle(.tertiary).help("Behavior is recorded to a log file") }
-                                    Text(rule.enabled ? rule.summary : "Disabled").font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(rule.enabled ? rule.summary : "Disabled").font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
-                                }.padding(.horizontal, 14).padding(.vertical, 10).contentShape(Rectangle())
+                                }.padding(.horizontal, 10).padding(.vertical, 8).contentShape(Rectangle())
                             }.buttonStyle(.plain)
                             if index != rules.count - 1 { Divider().padding(.leading, 54) }
                         }

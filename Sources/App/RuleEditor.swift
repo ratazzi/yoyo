@@ -14,12 +14,12 @@ struct RuleEditor: View {
         existing = store.policy.rules.contains { $0.id == initial.id }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 16) {
-                ProgramIcon(path: rule.pattern, size: 48)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ProgramIcon(path: rule.pattern, size: 32)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(existing ? "Edit Program Rule" : "Add Program Rule").font(.title2).fontWeight(.semibold)
-                    Text("Choose how this program uses time zones.").foregroundStyle(.secondary)
+                    Text(existing ? "Edit Program Rule" : "Add Program Rule").font(.headline)
+                    Text("Choose how this program uses time zones.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Form {
@@ -35,7 +35,7 @@ struct RuleEditor: View {
                 }
                 if rule.mode != "default" {
                     LabeledContent(rule.mode == "ask" ? "Suggested Time Zone" : "Fixed Time Zone") {
-                        TimeZoneField(selection: $rule.zone).frame(width: 285, height: 26)
+                        TimeZoneField(selection: $rule.zone).frame(width: 230, height: 24)
                     }
                 }
                 Toggle("Enable this rule", isOn: $rule.enabled)
@@ -58,7 +58,7 @@ struct RuleEditor: View {
                     else { validation = store.errorMessage; store.errorMessage = nil }
                 }.keyboardShortcut(.defaultAction)
             }
-        }.padding(28).frame(width: 570)
+        }.controlSize(.small).padding(16).frame(width: 480)
     }
 }
 
@@ -71,25 +71,32 @@ struct SettingsView: View {
     @State private var display = DisplayPreferences()
     @State private var favoriteZone = "Asia/Tokyo"
     @State private var clockFactory = ClockPresentationFactory()
+    @State private var page = "Time Zones"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Text("Settings").font(.title2).fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Settings").font(.headline)
+            Picker("Settings Section", selection: $page) {
+                Text("Time Zones").tag("Time Zones")
+                Text("Appearance").tag("Appearance")
+                Text("Service").tag("Service")
+            }.pickerStyle(.segmented).labelsHidden()
             ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+            if page == "Time Zones" {
             Surface {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Default Time Zone").fontWeight(.semibold)
                     Picker("Use", selection: $defaultMode) {
                         Text("System Default").tag("system"); Text("Custom Time Zone").tag("fixed")
                     }
                     if defaultMode == "fixed" { TimeZoneField(selection: $zone).frame(height: 26) }
-                    Text("Applies to every new program without a matching rule. A System Default rule excludes a program from injection.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }.padding(18)
+                    Text("For new programs without a rule. System Default rules exclude programs from injection.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(12)
             }
             Surface {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Favorite Time Zones").fontWeight(.semibold)
                     ForEach(display.favoriteTimeZones, id: \.self) { identifier in
                         HStack {
@@ -108,17 +115,19 @@ struct SettingsView: View {
                             }
                         }.disabled(TimeZone(identifier: favoriteZone) == nil || display.favoriteTimeZones.contains(favoriteZone))
                     }
-                    Text("Choose a favorite from the menu bar to change the default for new launches.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }.padding(18)
+                    Text("Switch the default time zone from the menu bar.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(12)
             }
+            }
+            if page == "Appearance" {
             Surface {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Menu Bar & Dock").fontWeight(.semibold)
                     Picker("Menu Bar", selection: $display.menuBarContent) {
                         ForEach(ClockContent.allCases) { content in Text(content.title).tag(content) }
                     }
-                    Toggle("Show Dock Icon", isOn: $display.showDockIcon).toggleStyle(.switch)
+                    Toggle("Show Dock Icon", isOn: $display.showDockIcon).toggleStyle(.checkbox)
                     if display.showDockIcon {
                         Picker("Dock Content", selection: $display.dockContent) {
                             ForEach(ClockContent.allCases) { content in Text(content.title).tag(content) }
@@ -138,15 +147,15 @@ struct SettingsView: View {
                             } else { Image(systemName: "globe").foregroundStyle(.secondary) }
                         }
                     }
-                    Text("Time and city are hidden when the default matches the system time zone. The app icon stays available.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }.padding(18)
+                    Text("Time and city are hidden when the default matches the system.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(12)
             }
             Surface {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Show Time Zone Near Active Window", isOn: $display.showWindowBadge).toggleStyle(.switch)
-                    Text("A mouse-through label follows the active window when its injected time zone is confirmed. Requires Accessibility access. Full-screen windows use the menu bar instead.")
-                        .font(.callout).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show Time Zone Near Active Window", isOn: $display.showWindowBadge).toggleStyle(.checkbox)
+                    Text("Requires Accessibility access and confirmed injection. Hidden in full screen; clicks pass through.")
+                        .font(.caption).foregroundStyle(.secondary)
                     HStack {
                         Button("Preview Badge") { NotificationCenter.default.post(name: .init("PreviewWindowBadge"), object: nil) }
                         Button("Accessibility Settings…") {
@@ -154,16 +163,18 @@ struct SettingsView: View {
                         }
                         Spacer()
                     }
-                    Text(store.windowBadgeStatus).font(.callout).foregroundStyle(.secondary)
-                }.padding(18)
+                    Text(store.windowBadgeStatus).font(.caption).foregroundStyle(.secondary)
+                }.padding(12)
             }
+            }
+            if page == "Service" {
             Surface {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Background Service").fontWeight(.semibold)
                             Text(store.online ? "Active · Applies rules from any launch source" : "Off · Rules are saved for later")
-                                .font(.callout).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Toggle("Enable Background Service", isOn: Binding(get: { store.policy.es_enabled }, set: { store.setServiceEnabled($0) })).toggleStyle(.switch).labelsHidden()
@@ -172,14 +183,15 @@ struct SettingsView: View {
                         Button("Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                         Button("Full Disk Access…") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!) }
                     }
-                    Text("Endpoint Security is optional. Launcher mode is not available yet.").font(.callout).foregroundStyle(.secondary)
-                }.padding(18)
+                    Text("Endpoint Security is optional. Launcher mode is not available yet.").font(.caption).foregroundStyle(.secondary)
+                }.padding(12)
             }
             }
-            }.frame(maxHeight: 500)
+            }
+            }.frame(height: page == "Service" ? 140 : (page == "Appearance" ? 320 : 300))
             if let validation { Text(validation).foregroundStyle(.red).font(.callout) }
             HStack {
-                Button("Open Log Folder") { NSWorkspace.shared.open(store.stateDirectory) }
+                if page == "Service" { Button("Open Log Folder") { NSWorkspace.shared.open(store.stateDirectory) } }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
@@ -188,7 +200,7 @@ struct SettingsView: View {
                     else { validation = store.errorMessage; store.errorMessage = nil }
                 }.keyboardShortcut(.defaultAction)
             }
-        }.padding(28).frame(width: 540)
+        }.font(.system(size: 12)).controlSize(.small).padding(16).frame(width: 480)
         .onAppear {
             defaultMode = store.policy.default_mode; zone = store.policy.default_zone.isEmpty ? "Asia/Tokyo" : store.policy.default_zone
             display = store.displayPreferences

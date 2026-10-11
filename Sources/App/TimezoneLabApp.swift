@@ -44,12 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             editMenu.addItem(NSMenuItem(title: title, action: NSSelectorFromString(action), keyEquivalent: key))
         }
         editItem.submenu = editMenu; appMenu.addItem(editItem); NSApp.mainMenu = appMenu
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 540),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "Timezone Lab"; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
-        window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 700, height: 460)
-        window.contentView = NSHostingView(rootView: DashboardView(store: store).ignoresSafeArea())
-        window.setFrameAutosaveName("TimezoneLabMainWindow"); window.center()
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Timezone Lab"; window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 440, height: 360)
+        window.contentView = NSHostingView(rootView: DashboardView(store: store))
+        window.setFrameAutosaveName("TimezoneLabCompactMainWindow"); window.center()
         windowBadge = WindowBadgeController(store: store)
         observation = store.$prompts.sink { [weak self] prompts in
             // Published notifications precede assignment. Present on the next main turn.
