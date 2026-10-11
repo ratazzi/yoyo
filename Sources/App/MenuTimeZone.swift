@@ -6,6 +6,6 @@ enum MenuTimeZone {
         let minutes = abs(seconds) / 60
         let sign = seconds < 0 ? "−" : "+"
         let fraction = minutes % 60 == 0 ? "" : String(format: ":%02d", minutes % 60)
-        return "UTC\(sign)\(minutes / 60)\(fraction)"
+        return "\(sign)\(String(format: "%02d", minutes / 60))\(fraction)"
     }
 }

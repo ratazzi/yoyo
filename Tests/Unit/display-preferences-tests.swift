@@ -20,12 +20,12 @@ struct DisplayPreferencesTests {
         assert(!clock.make(policy: policy, preferences: preferences, date: winter, system: TimeZone(identifier: "Etc/UTC")!).matchesSystem)
         policy.default_zone = "America/New_York"
         let summer = Date(timeIntervalSince1970: 1719835200) // 2024-07-01 12:00 UTC
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: winter) == "UTC−5")
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: summer) == "UTC−4")
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Tokyo")!, at: summer) == "UTC+9")
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Kathmandu")!, at: summer) == "UTC+5:45")
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Australia/Adelaide")!, at: summer) == "UTC+9:30")
-        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Etc/UTC")!, at: summer) == "UTC+0")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: winter) == "−05")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "America/New_York")!, at: summer) == "−04")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Tokyo")!, at: summer) == "+09")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Asia/Kathmandu")!, at: summer) == "+05:45")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Australia/Adelaide")!, at: summer) == "+09:30")
+        assert(MenuTimeZone.offset(for: TimeZone(identifier: "Etc/UTC")!, at: summer) == "+00")
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "08:00")
         preferences.use24HourTime = false; preferences.showSeconds = true
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "8:00:00 AM")

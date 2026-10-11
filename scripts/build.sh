@@ -25,7 +25,7 @@ build/policy-tests
 build/recent-apps-tests
 /usr/bin/swiftc -parse-as-library -import-objc-header Sources/Shared/timezone-display.h -licucore Sources/App/Models.swift Sources/App/DisplayPreferences.swift Sources/App/MenuProgramOverrides.swift Sources/App/MenuTimeZone.swift Tests/Unit/display-preferences-tests.swift build/timezone-display.o -o build/display-preferences-tests
 build/display-preferences-tests
-/usr/bin/swiftc -parse-as-library -framework AppKit Sources/App/MenuProgramRow.swift Tests/Unit/menu-program-row-tests.swift -o build/menu-program-row-tests
+/usr/bin/swiftc -parse-as-library -framework AppKit Sources/App/MenuRowView.swift Tests/Unit/menu-program-row-tests.swift -o build/menu-program-row-tests
 build/menu-program-row-tests
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "$lab_resources/bin/timezone-probe"
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
