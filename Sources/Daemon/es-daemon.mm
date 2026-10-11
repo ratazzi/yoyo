@@ -137,7 +137,7 @@ static NSDictionary *public_record(NSDictionary *record) {
     return @{@"pid": record[@"pid"], @"pidversion": record[@"pidversion"], @"parent_pid": record[@"parent_pid"],
         @"path": record[@"path"], @"session": session.identifier, @"rule_id": session.ruleID,
         @"mode": session.mode, @"zone": [session.mode isEqual:@"fixed"] ? session.zone : @"", @"loaded": record[@"loaded"] ?: @NO,
-        @"confirmation": ![session.mode isEqual:@"fixed"] ? @"not_requested" : ([record[@"loaded"] boolValue] ? @"confirmed" : @"unconfirmed"),
+        @"confirmation": ![session.mode isEqual:@"fixed"] || [record[@"environment_only"] boolValue] ? @"not_requested" : ([record[@"loaded"] boolValue] ? @"confirmed" : @"unconfirmed"),
         @"logging": @([policy loggingEnabledForSession:session]),
         @"started_at": @([record[@"start_sec"] doubleValue] + [record[@"start_usec"] doubleValue] / 1e6)};
 }
@@ -201,7 +201,7 @@ static void cleanup_flag(NSString *path) {
 static NSMutableDictionary *new_record(const es_process_t *process, TZSession *session) {
     return [@{@"pid": @(audit_token_to_pid(process->audit_token)), @"pidversion": @(process->audit_token.val[7]),
         @"uid": @(audit_token_to_euid(process->audit_token)), @"parent_pid": @(process->ppid),
-        @"path": token(process->executable->path), @"session": session, @"loaded": @NO,
+        @"path": token(process->executable->path), @"session": session, @"loaded": @NO, @"environment_only": @YES,
         @"start_sec": @(process->start_time.tv_sec), @"start_usec": @(process->start_time.tv_usec)} mutableCopy];
 }
 static NSMutableDictionary *record_for(const es_process_t *process) {
@@ -298,10 +298,13 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
             try {
                 if (deadline_seconds(message) < 0.25) throw std::runtime_error("insufficient AUTH_EXEC deadline remaining");
                 StartupTimezone setting;
+                setting.inject_library = false;
                 setting.zone = fixed ? session.zone.UTF8String : "";
+                record[@"environment_only"] = @YES;
                 TZSession *previous = parent[@"session"]; setting.previous_zone = previous.zone.UTF8String ?: "";
                 for (NSString *name in session.baseline) setting.baseline[name.UTF8String] = [session.baseline[name] UTF8String];
-                if (fixed) {
+                if (fixed) setting.extra["TIMEZONE_LAB_SESSION"] = session.identifier.UTF8String;
+                if (fixed && setting.inject_library) {
                     tracePath = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"trace-%@.flag", NSUUID.UUID.UUIDString]];
                     unsigned flag = [policy loggingEnabledForSession:session] ? 1 : 0;
                     int fd = open(tracePath.fileSystemRepresentation, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0644);
@@ -312,7 +315,7 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
                     setting.extra["TIMEZONE_LAB_TRACE_CONTROL"] = tracePath.UTF8String;
                 }
                 configure_startup_environment(audit_token_to_pid(target->audit_token), library.UTF8String, setting);
-                detail = fixed ? @"Startup environment prepared; awaiting hooks_loaded" : @"Inherited injection removed";
+                detail = fixed ? @"TZ startup environment applied; no library injection requested" : @"Inherited timezone environment removed";
             } catch (const std::exception &error) { allowed = NO; detail = @(error.what()); }
         }
     }

@@ -12,4 +12,4 @@ fi
     print -u2 "System CLI returned an unexpected timezone: $actual"
     exit 1
 }
-print -r -- 'Original /bin/date, empty environment, automatic ES injection: PASS'
+print -r -- 'Original /bin/date, empty environment, automatic Tokyo rule: PASS'

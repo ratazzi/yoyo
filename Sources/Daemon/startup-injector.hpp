@@ -5,6 +5,7 @@
 
 struct StartupTimezone {
     std::string zone; // empty restores the normal environment without injecting
+    bool inject_library = true;
     std::string previous_zone;
     std::map<std::string, std::string> baseline;
     std::map<std::string, std::string> extra;

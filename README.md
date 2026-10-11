@@ -59,6 +59,8 @@ The UI stores validated policy and sends launch answers. The daemon owns process
 
 ## Verification
 
+The current ES launch path applies the selected zone directly through `TZ`, without requesting dynamic library injection. It still rewrites the target startup environment through `task_for_pid`, so protected targets require SIP debugging restrictions to be disabled. This sets defaults for APIs that honor `TZ`; it does not lock timezone changes or virtualize `/etc/localtime`. Hook confirmation and the confirmed-hook window badge are unavailable for these launches. The hook-based live/rules acceptance scripts below describe the earlier injection path and are not acceptance tests for this TZ-only path; `scripts/verify-system-cli.sh` checks the configured Tokyo `/bin/date` rule.
+
 ```sh
 make test
 zsh scripts/verify-lab.sh

@@ -94,8 +94,11 @@ void transform_environment(std::vector<std::string> &environment, const std::str
     erase_variable(environment, "PROCESS_TIMEZONE");
     std::erase_if(environment, [](const auto &value) { return value.starts_with("TIMEZONE_LAB_"); });
     if (!policy.zone.empty()) {
-        set_variable(environment, "DYLD_INSERT_LIBRARIES", library, true);
-        set_variable(environment, "PROCESS_TIMEZONE", policy.zone, false);
+        set_variable(environment, "TZ", policy.zone, false);
+        if (policy.inject_library) {
+            set_variable(environment, "DYLD_INSERT_LIBRARIES", library, true);
+            set_variable(environment, "PROCESS_TIMEZONE", policy.zone, false);
+        }
         for (const auto &[key, value] : policy.extra) set_variable(environment, key, value, false);
     }
 }
@@ -212,10 +215,20 @@ void test_startup_stack_rewrite() {
     auto environment = read_vector(mach_task_self(), cursor, budget);
     auto apples = read_vector(mach_task_self(), cursor, budget);
     bool valid = frame[0] == (Word)&header && frame[1] == 1 && args == std::vector<std::string>{arg} &&
-        environment == std::vector<std::string>{"DYLD_INSERT_LIBRARIES=/existing.dylib:/test.dylib", unchanged, "PROCESS_TIMEZONE=Asia/Tokyo"} &&
+        environment == std::vector<std::string>{"DYLD_INSERT_LIBRARIES=/existing.dylib:/test.dylib", unchanged, "TZ=Asia/Tokyo", "PROCESS_TIMEZONE=Asia/Tokyo"} &&
         apples == std::vector<std::string>{apple};
     mach_vm_deallocate(mach_task_self(), allocation, 4096);
     if (!valid) throw std::runtime_error("startup stack preservation test failed");
+    StartupTimezone environment_only; environment_only.zone = "Asia/Tokyo"; environment_only.inject_library = false;
+    environment_only.extra["TIMEZONE_LAB_SESSION"] = "tz-only";
+    std::vector<std::string> tz_only{"KEEP=yes", "TZ=Etc/UTC", "DYLD_INSERT_LIBRARIES=/other.dylib"};
+    transform_environment(tz_only, "/test.dylib", environment_only);
+    if (tz_only != std::vector<std::string>{"KEEP=yes", "TZ=Asia/Tokyo", "DYLD_INSERT_LIBRARIES=/other.dylib", "TIMEZONE_LAB_SESSION=tz-only"})
+        throw std::runtime_error("TZ-only startup environment was not applied without injection");
+    StartupTimezone tz_restore; tz_restore.previous_zone = "Asia/Tokyo"; tz_restore.baseline["TZ"] = "Etc/UTC";
+    transform_environment(tz_only, "/test.dylib", tz_restore);
+    if (tz_only != std::vector<std::string>{"KEEP=yes", "TZ=Etc/UTC", "DYLD_INSERT_LIBRARIES=/other.dylib"})
+        throw std::runtime_error("TZ-only exclusion did not restore original environment");
     std::vector<std::string> inherited{"DYLD_INSERT_LIBRARIES=/other.dylib:/test.dylib", "PROCESS_TIMEZONE=Asia/Tokyo",
         "TIMEZONE_LAB_SESSION=parent", "TZ=Asia/Tokyo", "TZFILE=/var/db/timezone/zoneinfo/Asia/Tokyo", "KEEP=yes"};
     StartupTimezone restore; restore.previous_zone = "Asia/Tokyo"; restore.baseline["TZ"] = "Australia/Melbourne";
