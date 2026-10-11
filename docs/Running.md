@@ -1,4 +1,6 @@
-# Running Timezone Lab
+# Running Yoyo
+
+Yoyo's main bundle identifier is `yoyo.hola.ac`; its launchd label is `yoyo.hola.ac.daemon`. This development rename does not migrate old settings, rules or injection paths automatically. Relaunch configured applications before testing the renamed build. Archived feasibility documents retain the old experimental name.
 
 ## Local signed build
 
@@ -6,18 +8,18 @@ The tested identity is `Developer ID Application: jingsong zhao (74526N936A)`, f
 
 ```sh
 SIGN_IDENTITY=A5D59E9573A394C9AB54B3354913C818170B9948 zsh scripts/build.sh
-open build/TimezoneLab.app
+open build/Yoyo.app
 ```
 
 The build defaults to `/Applications/Xcode.app/Contents/Developer`; `DEVELOPER_DIR` can override it. Full Xcode is needed for the SwiftUI macro plugins. Native C/Objective-C/C++ use clang; the UI uses swiftc and an Objective-C bridging header.
 
-The ES provisioning profile defaults to `/Users/ratazzi/workspace/floria/provisioning/Floria_Endpoint_Security_Developer_ID.provisionprofile`. Set `ES_PROVISIONING_PROFILE` for another location. The helper retains that profile's `floria.hola.ac.endpoint-security` identifier and Team ID; the main app is `dev.timezone.lab`, with launchd label `dev.timezone.lab.daemon`. Floria itself is not modified or replaced.
+The ES provisioning profile defaults to `/Users/ratazzi/workspace/floria/provisioning/Floria_Endpoint_Security_Developer_ID.provisionprofile`. Set `ES_PROVISIONING_PROFILE` for another location. The helper retains that profile's `floria.hola.ac.endpoint-security` identifier and Team ID; the main app is `yoyo.hola.ac`, with launchd label `yoyo.hola.ac.daemon`. Floria itself is not modified or replaced.
 
 ## Service setup
 
 Open Settings and enable **Background Service**. Approve Login Items and Full Disk Access if macOS requires them. The helper bundle is:
 
-`build/TimezoneLab.app/Contents/Library/LaunchServices/TimezoneLabDaemon.app`
+`build/Yoyo.app/Contents/Library/LaunchServices/YoyoDaemon.app`
 
 The service runs as root. Its status is shown in Settings; the main toolbar has no status badge. Closing or quitting the UI leaves the daemon running; unanswered Ask Every Launch requests will expire and be denied. Stop the service in Settings before rebuilding. Reopen the app only after signing finishes so the running process passes the daemon's signature check.
 
@@ -51,7 +53,7 @@ Temporary execution diagnostics are separate from app history and opt-in behavio
 
 The optional window badge uses a nonactivating, mouse-through panel and Accessibility window geometry. It requires a confirmed hook session for the actual foreground app PID, executable and launch time. It tries outside positions above/right/below/left, hides when there is no room or the window is minimized/full screen/on another Space, and keeps the launch session's zone after rule edits or removal. Window positions are sampled at 5Hz; process metadata is refreshed every two seconds. `Preview Badge` does not require Accessibility access.
 
-`scripts/build-window-badge-fixture.sh` creates an isolated AppKit test application. Give it a temporary fixed-zone rule and use its **Test** menu for edges, maximization, full screen, minimization and display switching. For test-only snapshots, launch the UI with `open -na build/TimezoneLab.app --env TIMEZONE_LAB_WINDOW_BADGE_DIAGNOSTICS=1`; snapshots contain coordinates, visibility, PID, zone and panel flags, with no window titles or content. Launch with the variable set to `0` to disable capture. The completed manual run covered 17 snapshots across two real displays, including restoring windows and removing the rule while the injected process remained running; all checks passed. Evidence is in `build/window-badge-qa/summary.json`.
+`scripts/build-window-badge-fixture.sh` creates an isolated AppKit test application. Give it a temporary fixed-zone rule and use its **Test** menu for edges, maximization, full screen, minimization and display switching. For test-only snapshots, launch the UI with `open -na build/Yoyo.app --env TIMEZONE_LAB_WINDOW_BADGE_DIAGNOSTICS=1`; snapshots contain coordinates, visibility, PID, zone and panel flags, with no window titles or content. Launch with the variable set to `0` to disable capture. The completed manual run covered 17 snapshots across two real displays, including restoring windows and removing the rule while the injected process remained running; all checks passed. Evidence is in `build/window-badge-qa/summary.json`.
 
 `make test` exercises policy decisions and startup stack preservation. `scripts/verify-lab.sh` covers positive/negative controls, timezone mutation and file-hook compatibility. `scripts/verify-live.sh` checks automatic injection, names/data and 80 concurrent CLI launches. `scripts/verify-rules.sh` checks real process chains, globs, application subdirectories, global defaults, System Default exclusions and metadata-only logging.
 

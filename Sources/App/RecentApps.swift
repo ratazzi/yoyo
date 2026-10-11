@@ -48,7 +48,7 @@ struct RecentAppCollection {
         for app in saved {
             // This file is produced only by the application lifecycle monitor.
             let candidate = AppLaunchCandidate(app: app, activationPolicy: 0, backgroundOnly: false, isMainExecutable: true)
-            record(candidate, excluding: "dev.timezone.lab")
+            record(candidate, excluding: "yoyo.hola.ac")
         }
     }
 

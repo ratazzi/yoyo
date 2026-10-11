@@ -17,7 +17,7 @@ final class StatusDisplayController {
     init(store: AppStore, item: NSStatusItem) {
         self.item = item
         menuImage = Bundle.main.url(forResource: "MenuBarTemplate", withExtension: "png").flatMap { NSImage(contentsOf: $0) }
-            ?? NSImage(systemSymbolName: "globe", accessibilityDescription: "Timezone Lab")
+            ?? NSImage(systemSymbolName: "globe", accessibilityDescription: "Yoyo")
         menuImage?.size = NSSize(width: 18, height: 18); menuImage?.isTemplate = true
         if let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String,
            let url = Bundle.main.url(forResource: name, withExtension: nil), let icon = NSImage(contentsOf: url) {
@@ -49,7 +49,7 @@ final class StatusDisplayController {
             item.button?.image = menuImage
         }
         item.button?.toolTip = presentation.tooltip
-        item.button?.setAccessibilityLabel(presentation.label(for: preferences.menuBarContent) ?? "Timezone Lab")
+        item.button?.setAccessibilityLabel(presentation.label(for: preferences.menuBarContent) ?? "Yoyo")
         let dockKey = "\(preferences.showDockIcon):\(preferences.dockContent.rawValue):\(presentation.zoneIdentifier):\(presentation.label(for: preferences.dockContent) ?? "")"
         guard lastDockKey != dockKey else { return }
         lastDockKey = dockKey
@@ -104,6 +104,6 @@ private final class DockClockView: NSView {
                      font: .systemFont(ofSize: size * 0.12, weight: .medium))
             }
         }
-        setAccessibilityLabel(presentation.label(for: content) ?? "Timezone Lab")
+        setAccessibilityLabel(presentation.label(for: content) ?? "Yoyo")
     }
 }

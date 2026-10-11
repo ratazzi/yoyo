@@ -3,7 +3,7 @@ set -uo pipefail
 CHAIN_SCRIPT="${BASH_SOURCE[0]}"
 case "$CHAIN_SCRIPT" in /*) ;; *) CHAIN_SCRIPT="$PWD/$CHAIN_SCRIPT" ;; esac
 CHAIN_ROOT="${CHAIN_SCRIPT%/scripts/*}"
-CHAIN_APP="$CHAIN_ROOT/build/TimezoneLab.app/Contents/MacOS/TimezoneLab"
+CHAIN_APP="$CHAIN_ROOT/build/Yoyo.app/Contents/MacOS/Yoyo"
 CHAIN_HELPER="$CHAIN_ROOT/build/terminal-chain-policy"
 
 verify_process() {

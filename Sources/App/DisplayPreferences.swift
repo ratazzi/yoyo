@@ -96,6 +96,6 @@ final class ClockPresentationFactory {
         let city = String(canonical.split(separator: "/").last ?? Substring(canonical)).replacingOccurrences(of: "_", with: " ")
         let matchesSystem = policy.default_mode != "fixed" || canonical == identity(system) || (zone as NSTimeZone).data == (system as NSTimeZone).data
         return ClockPresentation(time: formatter.string(from: date), city: city, zoneIdentifier: canonical, matchesSystem: matchesSystem,
-            tooltip: matchesSystem ? "Timezone Lab · System Default\n\(system.identifier)" : "\(city) · \(canonical)\n\(detailFormatter.string(from: date))")
+            tooltip: matchesSystem ? "Yoyo · System Default\n\(system.identifier)" : "\(city) · \(canonical)\n\(detailFormatter.string(from: date))")
     }
 }

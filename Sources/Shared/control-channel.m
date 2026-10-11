@@ -11,7 +11,7 @@ BOOL tz_is_signed_ui(pid_t pid) {
     SecRequirementRef requirement = NULL;
     NSDictionary *attributes = @{(__bridge NSString *)kSecGuestAttributePid: @(pid)};
     OSStatus status = SecCodeCopyGuestWithAttributes(NULL, (__bridge CFDictionaryRef)attributes, kSecCSDefaultFlags, &code);
-    if (!status) status = SecRequirementCreateWithString(CFSTR("anchor apple generic and identifier \"dev.timezone.lab\" and certificate leaf[subject.OU] = \"74526N936A\""), kSecCSDefaultFlags, &requirement);
+    if (!status) status = SecRequirementCreateWithString(CFSTR("anchor apple generic and identifier \"yoyo.hola.ac\" and certificate leaf[subject.OU] = \"74526N936A\""), kSecCSDefaultFlags, &requirement);
     if (!status) status = SecCodeCheckValidity(code, kSecCSDefaultFlags, requirement);
     if (requirement) CFRelease(requirement);
     if (code) CFRelease(code);

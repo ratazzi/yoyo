@@ -1,10 +1,10 @@
-# Timezone Lab
+# Yoyo
 
 A native macOS menu bar app for per-program time zones. The interface is written in SwiftUI, with an Endpoint Security daemon and an injected Objective-C/C library.
 
 ## Use
 
-Open `build/TimezoneLab.app`. Use **+** to add an application, executable, or path pattern. Click a program to edit its rule:
+Open `build/Yoyo.app`. Use **+** to add an application, executable, or path pattern. Click a program to edit its rule:
 
 You can also drag applications or executable files onto the main window. Drop multiple programs to review their rules in sequence; dropping an existing program opens its rule instead of creating a duplicate. Other files and ordinary folders are skipped.
 
@@ -16,7 +16,7 @@ You can also drag applications or executable files onto the main window. Drop mu
 
 The menu bar menu shows favorite time zones with their local times and lets you switch the default directly. Manage favorites in Settings. Program Overrides lists enabled rules that differ from the default, plus Ask Every Launch rules. Running applications appear first; command-line rules use the Terminal icon without a type or running-state label. Click a program to edit its rule. These are configured rules, not a report of the time zone already loaded by a running process; changes apply to subsequent launches.
 
-**Settings → Show Time Zone Near Active Window** enables a mouse-through city/offset badge outside the frontmost app's focused window. It requires Accessibility access and an ES process session with confirmed hooks, matching executable and launch identity. It never substitutes a newly edited rule for a running process's launch time zone. The badge tries above, right, below, then left of the window; it stays hidden when there is no outside space, in full screen, or when the confirmed zone matches the system. **Preview Badge** shows a labeled five-second preview on Timezone Lab's own window without Accessibility access. The first version samples window position at 5Hz and refreshes the process session every two seconds.
+**Settings → Show Time Zone Near Active Window** enables a mouse-through city/offset badge outside the frontmost app's focused window. It requires Accessibility access and an ES process session with confirmed hooks, matching executable and launch identity. It never substitutes a newly edited rule for a running process's launch time zone. The badge tries above, right, below, then left of the window; it stays hidden when there is no outside space, in full screen, or when the confirmed zone matches the system. **Preview Badge** shows a labeled five-second preview on Yoyo's own window without Accessibility access. The first version samples window position at 5Hz and refreshes the process session every two seconds.
 
 Behavior logging is optional per rule and writes metadata to `build/state/behavior.jsonl`. There is no log viewer in the app. File contents, full arguments, and environment variables are not logged.
 
@@ -29,7 +29,7 @@ Requires macOS, full Xcode with SwiftUI compiler plugins, and native Apple Silic
 ```sh
 make test
 SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' make build
-open build/TimezoneLab.app
+open build/Yoyo.app
 ```
 
 Without `SIGN_IDENTITY`, the build is ad-hoc and cannot register an ES client. `ES_PROVISIONING_PROFILE` overrides the profile path. The current local development helper uses the existing Floria ES profile; see [Running and signing](docs/Running.md).

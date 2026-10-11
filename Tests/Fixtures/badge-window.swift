@@ -8,7 +8,7 @@ final class BadgeFixtureController: NSObject, NSWindowDelegate, NSApplicationDel
 
     override init() {
         super.init()
-        window.title = "Timezone Lab — Badge Test"; window.isReleasedWhenClosed = false; window.delegate = self
+        window.title = "Yoyo — Badge Test"; window.isReleasedWhenClosed = false; window.delegate = self
         label.font = .systemFont(ofSize: 15)
         label.frame = NSRect(x: 24, y: 24, width: 472, height: 232); label.autoresizingMask = [.width, .height]
         window.contentView?.addSubview(label)

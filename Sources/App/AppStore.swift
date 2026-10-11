@@ -17,7 +17,7 @@ final class AppStore: ObservableObject {
     private var timer: Timer?
     private var launchMonitor: AppLaunchMonitor?
 
-    var service: SMAppService { .daemon(plistName: "dev.timezone.lab.daemon.plist") }
+    var service: SMAppService { .daemon(plistName: "yoyo.hola.ac.daemon.plist") }
     var online: Bool { status == "Active" }
     var defaultDescription: String {
         policy.default_mode == "fixed" ? policy.default_zone.replacingOccurrences(of: "_", with: " ") : "System Default"
@@ -26,7 +26,7 @@ final class AppStore: ObservableObject {
     init() {
         let configURL = Bundle.main.resourceURL!.appendingPathComponent("lab-config.json")
         let config = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        stateDirectory = URL(fileURLWithPath: config?["state_directory"] as? String ?? NSTemporaryDirectory() + "TimezoneLab")
+        stateDirectory = URL(fileURLWithPath: config?["state_directory"] as? String ?? NSTemporaryDirectory() + "Yoyo")
         try? FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
         do {
             let data = try Data(contentsOf: stateDirectory.appendingPathComponent("policy.json"))

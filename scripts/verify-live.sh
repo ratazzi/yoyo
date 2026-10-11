@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -eu
 cd "${0:A:h:h}"
-lab_bin="$PWD/build/TimezoneLab.app/Contents/Resources/bin"
+lab_bin="$PWD/build/Yoyo.app/Contents/Resources/bin"
 [[ "$(/usr/bin/plutil -extract status raw -o - build/state/daemon-state.json)" == listening ]]
 [[ "$(/usr/bin/plutil -extract zone raw -o - build/state/daemon-state.json)" == Asia/Tokyo ]] || {
     print -u2 'Apply Asia/Tokyo in the app before running this acceptance test'

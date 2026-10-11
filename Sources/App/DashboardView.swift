@@ -98,7 +98,7 @@ struct DashboardView: View {
         } isTargeted: { isDropTargeted = $0 }
         .sheet(item: $editingRule, onDismiss: advanceImport) { rule in RuleEditor(store: store, initial: rule) }
         .sheet(isPresented: $store.showingSettings) { SettingsView(store: store) }
-        .alert("Timezone Lab", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+        .alert("Yoyo", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: .init("FocusProgramSearch"))) { _ in searchFocused = true }

@@ -3,13 +3,13 @@ set -eu
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 cd "${0:A:h:h}"
 lab_root="$PWD"
-lab_app="$lab_root/build/TimezoneLab.app"
+lab_app="$lab_root/build/Yoyo.app"
 lab_resources="$lab_app/Contents/Resources"
-lab_helper="$lab_app/Contents/Library/LaunchServices/TimezoneLabDaemon.app"
+lab_helper="$lab_app/Contents/Library/LaunchServices/YoyoDaemon.app"
 mkdir -p "$lab_resources/bin" "$lab_app/Contents/MacOS" "$lab_helper/Contents/MacOS" "$lab_app/Contents/Library/LaunchDaemons" build/state
 /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/render-app-icons.swift -framework AppKit -o build/render-app-icons
 build/render-app-icons build/icon-assets
-/usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "$lab_resources/TimezoneLabFlipClock.icns"
+/usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "$lab_resources/YoyoFlipClock.icns"
 # Remove the superseded generated resource from incremental builds.
 rm -f "$lab_resources/AppIcon.icns"
 cp build/icon-assets/MenuBarTemplate.png "$lab_resources/MenuBarTemplate.png"
@@ -17,7 +17,7 @@ cp build/icon-assets/MenuBarTemplate.png "$lab_resources/MenuBarTemplate.png"
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/control-channel.m -o build/control-channel.o
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/App/AppBridge.m -o build/app-bridge.o
 /usr/bin/clang -c Sources/Shared/timezone-display.c -o build/timezone-display.o
-/usr/bin/swiftc -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o -o "$lab_app/Contents/MacOS/TimezoneLab"
+/usr/bin/swiftc -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o -o "$lab_app/Contents/MacOS/Yoyo"
 /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/program-policy.o build/control-channel.o -o "$lab_helper/Contents/MacOS/timezone-es-daemon"
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/policy-tests
 build/policy-tests
@@ -42,7 +42,7 @@ cat > "$lab_helper/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>floria.hola.ac.endpoint-security</string>
 <key>CFBundleExecutable</key><string>timezone-es-daemon</string>
-<key>CFBundleName</key><string>Timezone Lab ES Daemon</string>
+<key>CFBundleName</key><string>Yoyo ES Daemon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 </dict></plist>
@@ -59,10 +59,10 @@ for target in Contents/Resources/bin/timezone-probe Contents/Resources/bin/cli-f
     /usr/bin/plutil -insert targets -string "$target" -append "$lab_config"
 done
 /usr/bin/plutil -convert json "$lab_config"
-lab_service="$lab_app/Contents/Library/LaunchDaemons/dev.timezone.lab.daemon.plist"
+lab_service="$lab_app/Contents/Library/LaunchDaemons/yoyo.hola.ac.daemon.plist"
 print -r -- '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict/></plist>' > "$lab_service"
-/usr/bin/plutil -insert Label -string dev.timezone.lab.daemon "$lab_service"
-/usr/bin/plutil -insert BundleProgram -string Contents/Library/LaunchServices/TimezoneLabDaemon.app/Contents/MacOS/timezone-es-daemon "$lab_service"
+/usr/bin/plutil -insert Label -string yoyo.hola.ac.daemon "$lab_service"
+/usr/bin/plutil -insert BundleProgram -string Contents/Library/LaunchServices/YoyoDaemon.app/Contents/MacOS/timezone-es-daemon "$lab_service"
 /usr/bin/plutil -insert ProgramArguments -array "$lab_service"
 /usr/bin/plutil -insert ProgramArguments -string timezone-es-daemon -append "$lab_service"
 /usr/bin/plutil -insert ProgramArguments -string --bundle-config -append "$lab_service"

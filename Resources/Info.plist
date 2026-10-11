@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-    <key>CFBundleExecutable</key><string>TimezoneLab</string>
-    <key>CFBundleIdentifier</key><string>dev.timezone.lab</string>
-    <key>CFBundleName</key><string>Timezone Lab</string>
-    <key>CFBundleIconFile</key><string>TimezoneLabFlipClock.icns</string>
+    <key>CFBundleExecutable</key><string>Yoyo</string>
+    <key>CFBundleIdentifier</key><string>yoyo.hola.ac</string>
+    <key>CFBundleName</key><string>Yoyo</string>
+    <key>CFBundleIconFile</key><string>YoyoFlipClock.icns</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>

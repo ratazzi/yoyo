@@ -20,12 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "TZ"
         let menu = NSMenu()
-        for (title, action, key) in [("Open Timezone Lab", #selector(showMain), ""), ("Settings…", #selector(showSettings), ","),
+        for (title, action, key) in [("Open Yoyo", #selector(showMain), ""), ("Settings…", #selector(showSettings), ","),
                                     ("Find Program…", #selector(focusSearch), "f")] {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: key); entry.target = self; menu.addItem(entry)
         }
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Timezone Lab", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
+        let quit = NSMenuItem(title: "Quit Yoyo", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
         statusMenu = StatusMenuController(store: store, applicationMenu: menu) { [weak self] rule in
             self?.showMain()
             NotificationCenter.default.post(name: .init("EditProgramRule"), object: rule.id)
@@ -46,10 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         editItem.submenu = editMenu; appMenu.addItem(editItem); NSApp.mainMenu = appMenu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Timezone Lab"; window.titlebarAppearsTransparent = true
+        window.title = "Yoyo"; window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 440, height: 360)
         window.contentView = NSHostingView(rootView: DashboardView(store: store))
-        window.setFrameAutosaveName("TimezoneLabCompactMainWindow"); window.center()
+        window.setFrameAutosaveName("YoyoCompactMainWindow"); window.center()
         windowBadge = WindowBadgeController(store: store)
         observation = store.$prompts.sink { [weak self] prompts in
             // Published notifications precede assignment. Present on the next main turn.
@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         promptWindow?.orderOut(nil); promptWindow = nil; activePromptID = prompt?.id
         guard let prompt else { return }
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 696, height: 456), styleMask: [.titled], backing: .buffered, defer: false)
-        panel.title = "Timezone Lab Launch Request"; panel.level = .floating; panel.hidesOnDeactivate = false
+        panel.title = "Yoyo Launch Request"; panel.level = .floating; panel.hidesOnDeactivate = false
         panel.contentView = NSHostingView(rootView: LaunchPromptView(store: store, prompt: prompt))
         panel.setContentSize(panel.contentView!.fittingSize)
         panel.center(); NSApp.activate(ignoringOtherApps: true); panel.makeKeyAndOrderFront(nil); promptWindow = panel
@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 }
 
 @main
-struct TimezoneLabApp {
+struct YoyoApp {
     @MainActor static func main() {
         if let status = ProcessInspector.run(arguments: CommandLine.arguments) { exit(status) }
         let app = NSApplication.shared; app.setActivationPolicy(.accessory)

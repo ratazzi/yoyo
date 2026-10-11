@@ -9,7 +9,7 @@ enum ProcessInspector {
               let data = try? Data(contentsOf: configURL),
               let config = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let directory = config["state_directory"] as? String else {
-            FileHandle.standardError.write(Data("Usage: TimezoneLab --inspect-process PID\n".utf8)); return 2
+            FileHandle.standardError.write(Data("Usage: Yoyo --inspect-process PID\n".utf8)); return 2
         }
         let response = TZControl(directory + "/control.sock", ["command": "process", "pid": pid])
             ?? ["error": "Background service unavailable"]

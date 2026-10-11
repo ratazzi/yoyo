@@ -541,7 +541,7 @@ int main(int argc, const char **argv) {
         NSMutableDictionary *resolved = [configuration mutableCopy];
         NSString *bundle = path; for (int i = 0; i < 3; i++) bundle = bundle.stringByDeletingLastPathComponent;
         library = configuration[@"library"]; if (!library.isAbsolutePath) library = [bundle stringByAppendingPathComponent:library];
-        uiPath = [bundle stringByAppendingPathComponent:@"Contents/MacOS/TimezoneLab"];
+        uiPath = [bundle stringByAppendingPathComponent:@"Contents/MacOS/Yoyo"];
         NSMutableArray *targets = [NSMutableArray new];
         for (NSString *target in configuration[@"targets"]) [targets addObject:target.isAbsolutePath ? target : [bundle stringByAppendingPathComponent:target]];
         resolved[@"targets"] = targets; configuration = resolved;
@@ -549,7 +549,7 @@ int main(int argc, const char **argv) {
         [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
         struct stat info; if (stat(directory.fileSystemRepresentation, &info)) return 2; owner = info.st_uid;
         socketPath = [directory stringByAppendingPathComponent:@"control.sock"];
-        engineQueue = dispatch_queue_create("dev.timezone.lab.engine", DISPATCH_QUEUE_SERIAL);
+        engineQueue = dispatch_queue_create("yoyo.hola.ac.engine", DISPATCH_QUEUE_SERIAL);
         records = [NSMutableDictionary new]; pending = [NSMutableDictionary new]; recent = [NSMutableArray new];
         processDescriptors = [NSMutableDictionary new]; descriptorOrder = [NSMutableOrderedSet new]; processParentTokens = [NSMutableDictionary new];
         state = [@{@"pid": @(getpid()), @"status": @"starting", @"injection_method": @"AUTH_EXEC + startup environment rewrite"} mutableCopy];

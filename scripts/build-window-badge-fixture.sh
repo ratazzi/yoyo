@@ -8,7 +8,7 @@ mkdir -p "$fixture_app/Contents/MacOS"
 cat > "$fixture_app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>dev.timezone.lab.badge-fixture</string>
+<key>CFBundleIdentifier</key><string>yoyo.hola.ac.badge-fixture</string>
 <key>CFBundleExecutable</key><string>window-badge-fixture</string>
 <key>CFBundleName</key><string>Window Badge Fixture</string>
 <key>CFBundlePackageType</key><string>APPL</string>

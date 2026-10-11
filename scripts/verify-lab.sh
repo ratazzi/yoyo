@@ -1,9 +1,9 @@
 #!/bin/zsh
 set -eu
 cd "${0:A:h:h}"
-lab_bin="$PWD/build/TimezoneLab.app/Contents/Resources/bin"
-lab_library="$PWD/build/TimezoneLab.app/Contents/Resources/libenforced.dylib"
-lab_daemon="$PWD/build/TimezoneLab.app/Contents/Library/LaunchServices/TimezoneLabDaemon.app/Contents/MacOS/timezone-es-daemon"
+lab_bin="$PWD/build/Yoyo.app/Contents/Resources/bin"
+lab_library="$PWD/build/Yoyo.app/Contents/Resources/libenforced.dylib"
+lab_daemon="$PWD/build/Yoyo.app/Contents/Library/LaunchServices/YoyoDaemon.app/Contents/MacOS/timezone-es-daemon"
 mkdir -p build/evidence
 /usr/bin/clang -ISources/Injection Tests/Integration/trace-handshake.c Sources/Injection/runtime-trace.c -o build/trace-handshake
 build/trace-handshake > build/evidence/trace-handshake.txt
@@ -22,7 +22,7 @@ if /usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \
 fi
 PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$lab_library" \
     "$lab_bin/timezone-probe" --expect Asia/Tokyo --require-injected --require-files > build/evidence/strict-files.json
-/usr/bin/codesign --verify --deep --strict build/TimezoneLab.app
-/usr/bin/plutil -lint Resources/Info.plist Resources/Daemon.entitlements build/TimezoneLab.app/Contents/Library/LaunchDaemons/dev.timezone.lab.daemon.plist
+/usr/bin/codesign --verify --deep --strict build/Yoyo.app
+/usr/bin/plutil -lint Resources/Info.plist Resources/Daemon.entitlements build/Yoyo.app/Contents/Library/LaunchDaemons/yoyo.hola.ac.daemon.plist
 print -r -- 'CLI controls, mutation checks, startup-stack self-test and bundle verification: PASS'
 print -r -- 'Run verify-live.sh to additionally verify the running ES service.'

@@ -8,7 +8,7 @@ final class WindowBadgeController {
     private let panel = WindowBadgePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     private let label = NSTextField(labelWithString: "")
     private let clock = ClockPresentationFactory()
-    private let queue = DispatchQueue(label: "dev.timezone.lab.window-badge", qos: .utility)
+    private let queue = DispatchQueue(label: "yoyo.hola.ac.window-badge", qos: .utility)
     private var timer: Timer?
     private var previewSubscription: AnyCancellable?
     private var identity = ""
@@ -23,7 +23,7 @@ final class WindowBadgeController {
         self.store = store
         diagnostics = ProcessInfo.processInfo.environment["TIMEZONE_LAB_WINDOW_BADGE_DIAGNOSTICS"] == "1"
             ? store.stateDirectory.appendingPathComponent("window-badge-diagnostics.json") : nil
-        panel.title = "Timezone Lab Window Badge"
+        panel.title = "Yoyo Window Badge"
         panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
         panel.level = .floating; panel.hidesOnDeactivate = false; panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]

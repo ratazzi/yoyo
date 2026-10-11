@@ -8,7 +8,7 @@ final class AppLaunchMonitor {
     private let file: URL
     private let onChange: ([RecentApp]) -> Void
     private let onError: (String) -> Void
-    private let ownBundleID = Bundle.main.bundleIdentifier ?? "dev.timezone.lab"
+    private let ownBundleID = Bundle.main.bundleIdentifier ?? "yoyo.hola.ac"
 
     init(file: URL, onChange: @escaping ([RecentApp]) -> Void, onError: @escaping (String) -> Void) {
         self.file = file; self.onChange = onChange; self.onError = onError
