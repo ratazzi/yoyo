@@ -88,8 +88,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private func showImages(in menu: NSMenu) {
         for entry in menu.items {
             // macOS 27 hides menu images by default, even when image is set.
-            if #available(macOS 27.0, *), entry.image != nil {
-                entry.preferredImageVisibility = .visible
+            if entry.image != nil, entry.responds(to: NSSelectorFromString("setPreferredImageVisibility:")) {
+                // NSMenuItemImageVisibilityVisible = 1; keep builds compatible with older SDKs.
+                entry.setValue(1, forKey: "preferredImageVisibility")
             }
             if let submenu = entry.submenu { showImages(in: submenu) }
         }
