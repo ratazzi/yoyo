@@ -53,7 +53,7 @@ def build_app
   ["#{contents}/Resources/bin", "#{contents}/MacOS", "#{helper}/Contents/MacOS", "#{contents}/Library/LaunchDaemons", "build/state"].each { mkdir_p(_1) }
   sh <<~SH
     set -eu
-    /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/render-app-icons.swift -framework AppKit -o build/render-app-icons
+    /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/assets/render-app-icons.swift -framework AppKit -o build/render-app-icons
     build/render-app-icons build/icon-assets
     /usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "#{contents}/Resources/YoyoFlipClock.icns"
     cp build/icon-assets/MenuBarTemplate.png "#{contents}/Resources/MenuBarTemplate.png"

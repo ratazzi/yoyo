@@ -7,7 +7,7 @@ Yoyo's main bundle identifier is `yoyo.hola.ac`; its launchd label is `yoyo.hola
 The tested identity is `Developer ID Application: jingsong zhao (74526N936A)`, fingerprint `A5D59E9573A394C9AB54B3354913C818170B9948`.
 
 ```sh
-SIGN_IDENTITY=A5D59E9573A394C9AB54B3354913C818170B9948 zsh scripts/build.sh
+SIGN_IDENTITY=A5D59E9573A394C9AB54B3354913C818170B9948 mise run build-app
 open build/Yoyo.app
 ```
 
@@ -62,15 +62,15 @@ The development build uses `build/state/`:
 
 The UI has no activity or log viewer. Settings can open the log folder. Default-mode programs have ES metadata only; timezone-function records require the hook. File events cover operations such as open/mmap/write, not every individual read. Hook tracing uses bounded waits and is best effort.
 
-Temporary execution diagnostics are separate from app history and opt-in behavior logs. `execution-diagnostics-config.json` enables a bounded capture using a UUID `run_id` and absolute `expires_at`; the daemon caps the remaining duration at ten minutes and stops automatically. `execution-diagnostics-<UUID>.jsonl` contains exec identities, parent/responsible audit identities and cached ancestry, with no arguments, environment variables or file content. `scripts/analyze-executions.swift` summarizes the resulting file. The completed sampling sessions are disabled; enabling a new capture requires a new unexpired configuration.
+Temporary execution diagnostics are separate from app history and opt-in behavior logs. `execution-diagnostics-config.json` enables a bounded capture using a UUID `run_id` and absolute `expires_at`; the daemon caps the remaining duration at ten minutes and stops automatically. `execution-diagnostics-<UUID>.jsonl` contains exec identities, parent/responsible audit identities and cached ancestry, with no arguments, environment variables or file content. `mise run diagnose:executions <input.jsonl> [report.md]` summarizes the resulting file. The completed sampling sessions are disabled; enabling a new capture requires a new unexpired configuration.
 
 ## Validation and limitations
 
 The optional window badge uses a nonactivating, mouse-through panel and Accessibility window geometry. It requires a confirmed hook session for the actual foreground app PID, executable and launch time. It tries outside positions above/right/below/left, hides when there is no room or the window is minimized/full screen/on another Space, and keeps the launch session's zone after rule edits or removal. Window positions are sampled at 5Hz; process metadata is refreshed every two seconds. `Preview Badge` does not require Accessibility access.
 
-`scripts/build-window-badge-fixture.sh` creates an isolated AppKit test application. Give it a temporary fixed-zone rule and use its **Test** menu for edges, maximization, full screen, minimization and display switching. For test-only snapshots, launch the UI with `open -na build/Yoyo.app --env TIMEZONE_LAB_WINDOW_BADGE_DIAGNOSTICS=1`; snapshots contain coordinates, visibility, PID, zone and panel flags, with no window titles or content. Launch with the variable set to `0` to disable capture. The completed manual run covered 17 snapshots across two real displays, including restoring windows and removing the rule while the injected process remained running; all checks passed. Evidence is in `build/window-badge-qa/summary.json`.
+`mise run build:badge-fixture` creates an isolated AppKit test application. Give it a temporary fixed-zone rule and use its **Test** menu for edges, maximization, full screen, minimization and display switching. For test-only snapshots, launch the UI with `open -na build/Yoyo.app --env TIMEZONE_LAB_WINDOW_BADGE_DIAGNOSTICS=1`; snapshots contain coordinates, visibility, PID, zone and panel flags, with no window titles or content. Launch with the variable set to `0` to disable capture. The completed manual run covered 17 snapshots across two real displays, including restoring windows and removing the rule while the injected process remained running; all checks passed. Evidence is in `build/window-badge-qa/summary.json`.
 
-`make test` exercises policy decisions and startup stack preservation. `scripts/verify-lab.sh` covers positive/negative controls, timezone mutation and file-hook compatibility. `scripts/verify-live.sh` checks automatic injection, names/data and 80 concurrent CLI launches. `scripts/verify-rules.sh` checks real process chains, globs, application subdirectories, global defaults, System Default exclusions and metadata-only logging.
+`mise run test` exercises policy decisions and startup stack preservation. `mise run verify:lab` covers positive/negative controls, timezone mutation and file-hook compatibility. `mise run verify:live` checks automatic injection, names/data and 80 concurrent CLI launches. `mise run verify:rules` checks real process chains, globs, application subdirectories, global defaults, System Default exclusions and metadata-only logging.
 
 The project has not implemented a launcher fallback, universally reliable shared XPC association, Rosetta support, guaranteed hook loading for every protected binary, lossless log delivery or production installation hardening. Current binaries and configuration live in a user-writable development directory. Do not interpret the tested user-space hooks as a universal anti-bypass or isolation boundary. Stopping ES cannot unload hooks from running processes; restart those processes to remove them.
 

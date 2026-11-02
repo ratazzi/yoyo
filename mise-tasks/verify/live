@@ -1,6 +1,7 @@
 #!/bin/zsh
+#MISE description="Verify the running development ES service"
 set -eu
-cd "${0:A:h:h}"
+cd "${MISE_PROJECT_ROOT:?Run through mise}"
 lab_bin="$PWD/build/Yoyo.app/Contents/Resources/bin"
 [[ "$(/usr/bin/plutil -extract status raw -o - build/state/daemon-state.json)" == listening ]]
 [[ "$(/usr/bin/plutil -extract zone raw -o - build/state/daemon-state.json)" == Asia/Tokyo ]] || {
@@ -11,7 +12,7 @@ mkdir -p build/evidence/live
 /usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \
     "$lab_bin/timezone-probe" --expect Asia/Tokyo --require-injected --require-files --attack --scan-zoneinfo \
     > build/evidence/live/probe.json 2> build/evidence/live/probe.stderr
-zsh scripts/verify-system-cli.sh
+mise run verify:system-cli
 typeset -a children
 for iteration in {1..20}; do
     /usr/bin/env -u DYLD_INSERT_LIBRARIES -u PROCESS_TIMEZONE -u TZ -u TZFILE \

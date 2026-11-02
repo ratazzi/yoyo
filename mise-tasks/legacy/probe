@@ -1,6 +1,8 @@
 #!/bin/zsh
+#MISE description="Run the original feasibility probes; optional --gui"
+#USAGE flag "--gui" help="Also run the GUI launch probe"
 set -eu
-cd "${0:A:h:h}"
+cd "${MISE_PROJECT_ROOT:?Run through mise}"
 mkdir -p build
 /usr/bin/clang -fobjc-arc -framework Foundation -framework CoreFoundation Tests/Legacy/probe.m -o build/probe
 /usr/bin/clang -arch arm64 -arch arm64e -dynamiclib Tests/Legacy/inject.c -o build/libtimezone.dylib
@@ -21,7 +23,7 @@ if PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libtimezone.dyl
 fi
 PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libenforced.dylib" ./build/adversary
 PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libenforced.dylib" /bin/date -r 0 '+%F %T %Z %z'
-if [[ "${1:-}" == --gui ]]; then
+if [[ "${usage_gui:-false}" == true ]]; then
     mkdir -p build/TimezoneProbe.app/Contents/MacOS
     cp build/probe build/TimezoneProbe.app/Contents/MacOS/TimezoneProbe
     cp Tests/Legacy/probe-Info.plist build/TimezoneProbe.app/Contents/Info.plist

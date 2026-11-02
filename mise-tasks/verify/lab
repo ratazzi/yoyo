@@ -1,6 +1,7 @@
 #!/bin/zsh
+#MISE description="Verify local injection controls and bundle integrity"
 set -eu
-cd "${0:A:h:h}"
+cd "${MISE_PROJECT_ROOT:?Run through mise}"
 lab_bin="$PWD/build/Yoyo.app/Contents/Resources/bin"
 lab_library="$PWD/build/Yoyo.app/Contents/Resources/libenforced.dylib"
 lab_daemon="$PWD/build/Yoyo.app/Contents/Library/LaunchServices/YoyoDaemon.app/Contents/MacOS/timezone-es-daemon"
@@ -25,4 +26,4 @@ PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$lab_library" \
 /usr/bin/codesign --verify --deep --strict build/Yoyo.app
 /usr/bin/plutil -lint Resources/Info.plist Resources/Daemon.entitlements build/Yoyo.app/Contents/Library/LaunchDaemons/yoyo.hola.ac.daemon.plist
 print -r -- 'CLI controls, mutation checks, startup-stack self-test and bundle verification: PASS'
-print -r -- 'Run verify-live.sh to additionally verify the running ES service.'
+print -r -- 'Run mise run verify:live to additionally verify the running ES service.'

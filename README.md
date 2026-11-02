@@ -43,7 +43,7 @@ open build/Yoyo.app
 
 Without `SIGN_IDENTITY`, the build is ad-hoc and cannot register an ES client. `ES_PROVISIONING_PROFILE` overrides the profile path. The current local development helper uses the existing Floria ES profile; see [Running and signing](docs/Running.md).
 
-Stop the background service in Settings before replacing the signed bundle. Wait for the build to finish before reopening it. `make build`, `build-lab.sh`, and `scripts/build.sh` forward to `mise run build-app`. Run `mise run package-dmg` for a Release build in `build/Yoyo.dmg`; set `OUTPUT_DMG` to choose another path. Existing images are not overwritten. Tests run separately with `mise run test`. `mise run release` builds with Developer ID and Hardened Runtime, notarizes the DMG, staples the ticket and verifies Gatekeeper acceptance. Release builds use the logged-in user’s `~/Library/Application Support/Yoyo` directory instead of the build machine’s paths. See [CI release setup](docs/Running.md#github-releases).
+Stop the background service in Settings before replacing the signed bundle. Wait for the build to finish before reopening it. Use `mise run build-app` to build the app. Run `mise run package-dmg` for a Release build in `build/Yoyo.dmg`; set `OUTPUT_DMG` to choose another path. Existing images are not overwritten. Tests run separately with `mise run test`. `mise run release` builds with Developer ID and Hardened Runtime, notarizes the DMG, staples the ticket and verifies Gatekeeper acceptance. Release builds use the logged-in user’s `~/Library/Application Support/Yoyo` directory instead of the build machine’s paths. See [CI release setup](docs/Running.md#github-releases).
 
 Local builds default to `BUILD_CONFIGURATION=Debug`. In Settings → Appearance, **Always Show Badge (Debug)** keeps clearly labeled badges on visible normal application windows with a validated non-system launch time zone, including unfocused windows and sessions whose hooks are not confirmed. System-default and unknown sessions have no badge. Badges are removed for closed/minimized, fully covered and other-desktop windows. Placement avoids higher windows and falls back inside an uncovered part of the owning window when no outside space is available. Normal mode still requires Accessibility access and follows only the focused window. Set `BUILD_CONFIGURATION=Release` to omit the switch and ignore its saved preference.
 
@@ -61,7 +61,9 @@ Tests/
   Integration/     Real process-chain acceptance drivers
   Fixtures/        CLI probes and test executables
   Legacy/          Original feasibility controls
-scripts/           Bundle build, signing and acceptance commands
+mise.toml          Build, release and short command tasks
+mise-tasks/        Longer test and verification tasks
+scripts/           Assets, diagnostics, verification tools and Surge integration
 docs/              Running instructions and archived research
 build/             Generated app, test binaries, configuration and logs
 ```
@@ -70,27 +72,41 @@ The UI stores validated policy and sends launch answers. The daemon owns process
 
 ## Verification
 
-The current ES launch path writes `TZ` directly and requests dynamic library injection through `DYLD_INSERT_LIBRARIES`. It rewrites the target startup environment through `task_for_pid`, so protected targets require SIP debugging restrictions to be disabled. Actual library loading is separately confirmed by the hooks; preparing the environment alone is not proof of injection. If the target refuses to load the library, `TZ` can still affect APIs that honor it, but timezone locking, `/etc/localtime` virtualization and the confirmed-hook window badge require the hooks. Relaunch existing targets to use the newly enabled injection path. `scripts/verify-system-cli.sh` checks the configured Tokyo `/bin/date` rule.
+Use `mise tasks` to list commands and `mise run <task> --help` for arguments. Short commands live in `mise.toml`; longer workflows live in `mise-tasks/`. The Makefile and standalone shell entry points have been replaced by these tasks.
 
-`make verify-late-rule` tests adding an app rule after its parent process is already running, then repeats both unruled-at-launch and ruled-at-launch cases across UI restarts. The existing unruled parent and its direct children outside the app bundle keep their original timezone; a newly launched helper inside the bundle matches the new rule, and its descendants inherit that choice. UI restarts must keep the daemon PID unchanged. Child launches deliberately supply a conflicting `TZ` so normal environment inheritance cannot hide a lost daemon session. The test requires this build of Yoyo open, its signed ES service running, and System Default as the global default. It adds only a temporary fixture rule and removes that rule on completion, retaining other policy settings.
+| Tasks | Purpose |
+| --- | --- |
+| `build-app`, `package-dmg`, `release`, `notarize-dmg` | Build, package and publish artifacts |
+| `test` | Unit tests and daemon self-tests; also used by CI |
+| `build:*` | Build test fixtures |
+| `verify:*` | Integration and live acceptance checks |
+| `diagnose:*` | Inspect execution logs and window geometry |
+| `dev:surge [port]` | Run the standalone Surge bridge |
+| `legacy:probe [--gui]` | Original feasibility experiments |
 
-`make verify-daemon-restart` requires sudo and tests both launch histories across actual service restarts using `launchctl kickstart -k`. It first stops the registered service normally, rebuilds the signed app, and starts it again. Only the launchctl operations run as root; the fixtures, policy writes and signed process diagnostics run as the original user. Service restarts must change the daemon PID while preserving the parent's session identity, launch-time zone and confirmation state. Output is saved to `build/evidence/daemon-restart.log`. `make test` also checks disk session recovery, including rejection of stale process identities and preservation of a launch choice and original TZ baseline after its rule changes.
+Live verification tasks target the development app and `build/state`, not the installed release. Check each task's prerequisites below before running it. `mise run verify:cli --control` runs explicit injection without a configured ES rule; `mise run build:late-rule-fixture` builds fixtures without running the live tests.
+
+The current ES launch path writes `TZ` directly and requests dynamic library injection through `DYLD_INSERT_LIBRARIES`. It rewrites the target startup environment through `task_for_pid`, so protected targets require SIP debugging restrictions to be disabled. Actual library loading is separately confirmed by the hooks; preparing the environment alone is not proof of injection. If the target refuses to load the library, `TZ` can still affect APIs that honor it, but timezone locking, `/etc/localtime` virtualization and the confirmed-hook window badge require the hooks. Relaunch existing targets to use the newly enabled injection path. `mise run verify:system-cli` checks the configured Tokyo `/bin/date` rule.
+
+`mise run verify:late-rule` tests adding an app rule after its parent process is already running, then repeats both unruled-at-launch and ruled-at-launch cases across UI restarts. The existing unruled parent and its direct children outside the app bundle keep their original timezone; a newly launched helper inside the bundle matches the new rule, and its descendants inherit that choice. UI restarts must keep the daemon PID unchanged. Child launches deliberately supply a conflicting `TZ` so normal environment inheritance cannot hide a lost daemon session. The test requires this build of Yoyo open, its signed ES service running, and System Default as the global default. It adds only a temporary fixture rule and removes that rule on completion, retaining other policy settings.
+
+`mise run verify:daemon-restart` requires sudo and tests both launch histories across actual service restarts using `launchctl kickstart -k`. It first stops the registered service normally, rebuilds the signed app, and starts it again. Only the launchctl operations run as root; the fixtures, policy writes and signed process diagnostics run as the original user. Service restarts must change the daemon PID while preserving the parent's session identity, launch-time zone and confirmation state. Output is saved to `build/evidence/daemon-restart.log`. `mise run test` also checks disk session recovery, including rejection of stale process identities and preservation of a launch choice and original TZ baseline after its rule changes.
 
 Service restart guarantees apply after the service reports `listening` again. Launches during the stopped interval cannot be authorized or rewritten by ES.
 
 ```sh
-make test
-zsh scripts/verify-lab.sh
-zsh scripts/verify-live.sh
-zsh scripts/verify-rules.sh
+mise run test
+mise run verify:lab
+mise run verify:live
+mise run verify:rules
 ```
 
 Live acceptance requires the signed ES service, its permissions, and the existing Tokyo rules for the test fixtures and `/bin/date`. The rules acceptance driver temporarily changes the policy and restores it on completion; it also briefly exercises the global default.
 
-To test a real Terminal process chain, configure a fixed time zone for Terminal, build the signed app, enable ES, then launch an independent Terminal instance:
+To test a real Terminal process chain, configure a fixed time zone for Terminal, build the signed app, enable ES, then run this command inside a newly launched Terminal instance:
 
 ```sh
-open -n -a /System/Applications/Utilities/Terminal.app "$PWD/scripts/terminal-chain-test.command"
+mise run verify:terminal-chain
 ```
 
 The test checks confirmed injection and a shared launch session through 1, 3 and 8 nested bash processes, including 8 layers with an empty environment and a conflicting `TZ`. It runs the original `/bin/date`, temporarily disables only exact date rules to isolate inheritance, then restores them to check explicit child precedence. Cleanup restores the tagged rules without replacing unrelated settings. Avoid editing date rules during the test. Reports and per-process metadata are saved under `build/terminal-chain.*`; `build/terminal-chain-last-run` identifies the latest run. The signed app also provides a read-only `--inspect-process PID` diagnostic.
