@@ -6,6 +6,12 @@ lab_root="$PWD"
 lab_app="$lab_root/build/Yoyo.app"
 lab_resources="$lab_app/Contents/Resources"
 lab_helper="$lab_app/Contents/Library/LaunchServices/YoyoDaemon.app"
+typeset -a swift_flags
+case "${BUILD_CONFIGURATION:-Debug}" in
+    Debug) swift_flags=(-D DEBUG) ;;
+    Release) swift_flags=() ;;
+    *) print -u2 'BUILD_CONFIGURATION must be Debug or Release'; exit 2 ;;
+esac
 mkdir -p "$lab_resources/bin" "$lab_app/Contents/MacOS" "$lab_helper/Contents/MacOS" "$lab_app/Contents/Library/LaunchDaemons" build/state
 /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/render-app-icons.swift -framework AppKit -o build/render-app-icons
 build/render-app-icons build/icon-assets
@@ -17,18 +23,23 @@ cp build/icon-assets/MenuBarTemplate.png "$lab_resources/MenuBarTemplate.png"
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/control-channel.m -o build/control-channel.o
 /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/App/AppBridge.m -o build/app-bridge.o
 /usr/bin/clang -c Sources/Shared/timezone-display.c -o build/timezone-display.o
-/usr/bin/swiftc -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o -o "$lab_app/Contents/MacOS/Yoyo"
+/usr/bin/clang -fobjc-arc -c Sources/App/SurgeSocketPrototype.m -o build/surge-socket-prototype.o
+/usr/bin/swiftc "${swift_flags[@]}" -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o build/surge-socket-prototype.o -o "$lab_app/Contents/MacOS/Yoyo"
 /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/program-policy.o build/control-channel.o -o "$lab_helper/Contents/MacOS/timezone-es-daemon"
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/policy-tests
 build/policy-tests
 /usr/bin/swiftc -parse-as-library Sources/App/RecentApps.swift Tests/Unit/recent-apps-tests.swift -o build/recent-apps-tests
 build/recent-apps-tests
-/usr/bin/swiftc -parse-as-library -import-objc-header Sources/Shared/timezone-display.h -licucore Sources/App/Models.swift Sources/App/DisplayPreferences.swift Sources/App/MenuProgramOverrides.swift Sources/App/MenuTimeZone.swift Tests/Unit/display-preferences-tests.swift build/timezone-display.o -o build/display-preferences-tests
+/usr/bin/swiftc "${swift_flags[@]}" -parse-as-library -import-objc-header Sources/Shared/timezone-display.h -licucore Sources/App/Models.swift Sources/App/DisplayPreferences.swift Sources/App/MenuProgramOverrides.swift Sources/App/MenuTimeZone.swift Tests/Unit/display-preferences-tests.swift build/timezone-display.o -o build/display-preferences-tests
 build/display-preferences-tests
 /usr/bin/swiftc -parse-as-library -framework AppKit Sources/App/MenuRowView.swift Tests/Unit/menu-program-row-tests.swift -o build/menu-program-row-tests
 build/menu-program-row-tests
 /usr/bin/swiftc -parse-as-library Sources/App/WindowBadgeModel.swift Tests/Unit/window-badge-tests.swift -o build/window-badge-tests
 build/window-badge-tests
+/usr/bin/swiftc -parse-as-library Sources/App/SurgeTimezoneRouting.swift Tests/Unit/surge-timezone-routing-tests.swift -o build/surge-timezone-routing-tests
+build/surge-timezone-routing-tests
+/usr/bin/swiftc -parse-as-library Sources/App/SurgeNetworkAudit.swift Tests/Unit/surge-network-audit-tests.swift -o build/surge-network-audit-tests
+build/surge-network-audit-tests
 /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "$lab_resources/bin/timezone-probe"
 /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "$lab_resources/bin/cli-fixture"
 /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "$lab_resources/bin/cli-start-paths"

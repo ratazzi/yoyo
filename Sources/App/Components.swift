@@ -33,9 +33,10 @@ struct TimeZoneField: NSViewRepresentable {
 
 struct ProgramIcon: View {
     let path: String
+    var kind: String? = nil
     var size: CGFloat = 36
     var body: some View {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+        Image(nsImage: ProgramIcons.image(path: path, kind: kind))
             .resizable().interpolation(.high).frame(width: size, height: size)
     }
 }

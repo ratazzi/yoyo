@@ -13,25 +13,43 @@ enum ClockContent: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum DockTimeZoneMode: String, Codable {
+    case followDefault, system, fixed
+}
+
 struct DisplayPreferences: Codable, Equatable {
     var menuBarContent: ClockContent = .timeAndCity
     var showDockIcon = false
     var dockContent: ClockContent = .timeAndCity
+    var dockTimeZoneMode: DockTimeZoneMode = .followDefault
+    var dockTimeZone = "Asia/Tokyo"
     var use24HourTime = true
     var showSeconds = false
     var showWindowBadge = false
+    var debugAlwaysShowWindowBadge = false
     var favoriteTimeZones = ["Etc/UTC", "Asia/Tokyo", "America/New_York", "Europe/London"]
 
     init() {}
-    private enum CodingKeys: String, CodingKey { case menuBarContent, showDockIcon, dockContent, use24HourTime, showSeconds, favoriteTimeZones, showWindowBadge }
+    var forceWindowBadge: Bool {
+        #if DEBUG
+        return debugAlwaysShowWindowBadge
+        #else
+        return false
+        #endif
+    }
+
+    private enum CodingKeys: String, CodingKey { case menuBarContent, showDockIcon, dockContent, dockTimeZoneMode, dockTimeZone, use24HourTime, showSeconds, favoriteTimeZones, showWindowBadge, debugAlwaysShowWindowBadge }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         menuBarContent = try values.decodeIfPresent(ClockContent.self, forKey: .menuBarContent) ?? .timeAndCity
         showDockIcon = try values.decodeIfPresent(Bool.self, forKey: .showDockIcon) ?? false
         dockContent = try values.decodeIfPresent(ClockContent.self, forKey: .dockContent) ?? .timeAndCity
+        dockTimeZoneMode = try values.decodeIfPresent(DockTimeZoneMode.self, forKey: .dockTimeZoneMode) ?? .followDefault
+        dockTimeZone = try values.decodeIfPresent(String.self, forKey: .dockTimeZone) ?? "Asia/Tokyo"
         use24HourTime = try values.decodeIfPresent(Bool.self, forKey: .use24HourTime) ?? true
         showSeconds = try values.decodeIfPresent(Bool.self, forKey: .showSeconds) ?? false
         showWindowBadge = try values.decodeIfPresent(Bool.self, forKey: .showWindowBadge) ?? false
+        debugAlwaysShowWindowBadge = try values.decodeIfPresent(Bool.self, forKey: .debugAlwaysShowWindowBadge) ?? false
         favoriteTimeZones = try values.decodeIfPresent([String].self, forKey: .favoriteTimeZones) ?? ["Etc/UTC", "Asia/Tokyo", "America/New_York", "Europe/London"]
     }
 }
@@ -42,6 +60,14 @@ struct ClockPresentation: Equatable {
     var zoneIdentifier: String
     var matchesSystem: Bool
     var tooltip: String
+
+    // The four-digit artwork shows hours and minutes in the selected time format.
+    var clockDigits: String {
+        let components = time.split(separator: ":")
+        guard components.count >= 2, let hour = Int(components[0]),
+              let minute = Int(components[1].prefix(2)) else { return "0000" }
+        return String(format: "%02d%02d", hour, minute)
+    }
 
     func label(for content: ClockContent) -> String? {
         guard !matchesSystem else { return nil }
@@ -79,6 +105,19 @@ final class ClockPresentationFactory {
         }
         identities[zone.identifier] = canonical
         return canonical
+    }
+
+    func makeDock(policy: PolicyDocument, preferences: DisplayPreferences, date: Date = Date(), system: TimeZone = .autoupdatingCurrent) -> ClockPresentation {
+        var dockPolicy = policy
+        switch preferences.dockTimeZoneMode {
+        case .followDefault: break
+        case .system: dockPolicy.default_mode = "system"
+        case .fixed:
+            if TimeZone(identifier: preferences.dockTimeZone) != nil {
+                dockPolicy.default_mode = "fixed"; dockPolicy.default_zone = preferences.dockTimeZone
+            }
+        }
+        return make(policy: dockPolicy, preferences: preferences, date: date, system: system)
     }
 
     func make(policy: PolicyDocument, preferences: DisplayPreferences, date: Date = Date(), system: TimeZone = .autoupdatingCurrent) -> ClockPresentation {

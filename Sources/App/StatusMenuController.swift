@@ -7,7 +7,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let applicationMenu: NSMenu
     private let openRule: (ProgramRule) -> Void
     private let clock = ClockPresentationFactory()
-    private let terminalIcon = NSWorkspace.shared.icon(forFile: "/System/Applications/Utilities/Terminal.app")
     private let rowSelection = MenuRowSelection()
 
     init(store: AppStore, applicationMenu: NSMenu, openRule: @escaping (ProgramRule) -> Void) {
@@ -121,7 +120,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let entry = action(title, #selector(editRule), value: rule.id)
         entry.setAccessibilityLabel(title + (row.running ? ", Running" : ""))
         entry.toolTip = "\(rule.pattern)\n\(rule.summary)\n\(row.running ? "Running application. " : "")Configured rule; existing processes keep their launch time zone."
-        let image = (rule.kind == "app" ? NSWorkspace.shared.icon(forFile: rule.pattern) : terminalIcon).copy() as? NSImage
+        let image = ProgramIcons.image(path: rule.pattern, kind: rule.kind).copy() as? NSImage
         let view = MenuRowView(name: rule.title, detail: .program(zone: zone, running: row.running), icon: image, selection: rowSelection)
         view.item = entry; view.toolTip = entry.toolTip
         entry.view = view

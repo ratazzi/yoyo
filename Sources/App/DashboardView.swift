@@ -138,7 +138,7 @@ struct DashboardView: View {
                         let visible = Array(matchingRecent.prefix(showingAllRecent ? 100 : 5))
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, launch in
                             HStack(spacing: 10) {
-                                ProgramIcon(path: launch.path, size: 26)
+                                ProgramIcon(path: launch.path, kind: "app", size: 26)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(launch.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
                                     Text(launch.path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -220,7 +220,7 @@ struct DashboardView: View {
                         ForEach(Array(rules.enumerated()), id: \.element.id) { index, rule in
                             Button { editingRule = rule } label: {
                                 HStack(spacing: 12) {
-                                    ProgramIcon(path: rule.pattern, size: 28)
+                                    ProgramIcon(path: rule.pattern, kind: rule.kind, size: 28)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(rule.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary)
                                         Text(rule.pattern).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)

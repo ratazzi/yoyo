@@ -11,6 +11,11 @@ struct DisplayPreferencesTests {
         policy.default_mode = "fixed"; policy.default_zone = "Asia/Tokyo"
         let tokyo = clock.make(policy: policy, preferences: preferences, date: epoch, system: system)
         assert(tokyo.time == "09:00" && tokyo.city == "Tokyo" && tokyo.label(for: .timeAndCity) == "Tokyo 09:00")
+        assert(tokyo.clockDigits == "0900")
+        let nextMinute = clock.make(policy: policy, preferences: preferences, date: epoch.addingTimeInterval(60), system: system)
+        assert(nextMinute.clockDigits == "0901")
+        let sameZone = clock.make(policy: policy, preferences: preferences, date: epoch, system: TimeZone(identifier: "Asia/Tokyo")!)
+        assert(sameZone.label(for: .time) == nil && sameZone.clockDigits == "0900")
         assert(tokyo.label(for: .iconOnly) == nil && tokyo.label(for: .city) == "Tokyo")
         policy.default_zone = "Japan"
         assert(clock.make(policy: policy, preferences: preferences, date: epoch, system: TimeZone(identifier: "Asia/Tokyo")!).matchesSystem)
@@ -29,10 +34,41 @@ struct DisplayPreferencesTests {
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "08:00")
         preferences.use24HourTime = false; preferences.showSeconds = true
         assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).time == "8:00:00 AM")
+        assert(clock.make(policy: policy, preferences: preferences, date: summer, system: TimeZone(identifier: "Asia/Tokyo")!).clockDigits == "0800")
         policy.default_zone = "America/Argentina/Buenos_Aires"
         assert(clock.make(policy: policy, preferences: preferences, date: epoch, system: system).city == "Buenos Aires")
+        var dockPreferences = DisplayPreferences()
+        var dockPolicy = PolicyDocument(); dockPolicy.default_mode = "fixed"; dockPolicy.default_zone = "Asia/Tokyo"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "09:00")
+        dockPreferences.dockTimeZoneMode = .fixed; dockPreferences.dockTimeZone = "Europe/Paris"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "01:00")
+        assert(clock.make(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "09:00",
+            "A custom Dock zone must not change the menu bar or default program zone")
+        dockPolicy.default_mode = "system"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "01:00")
+        dockPolicy.default_mode = "fixed"; dockPolicy.default_zone = "Asia/Shanghai"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "01:00")
+        dockPreferences.dockTimeZoneMode = .system
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "19:00")
+        dockPreferences.dockTimeZoneMode = .followDefault
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "08:00")
+        dockPreferences.dockTimeZoneMode = .fixed; dockPreferences.dockTimeZone = "America/Los_Angeles"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: winter, system: system).clockDigits == "1600")
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: summer, system: system).clockDigits == "0500")
+        let savedDock = try JSONDecoder().decode(DisplayPreferences.self, from: JSONEncoder().encode(dockPreferences))
+        assert(savedDock.dockTimeZoneMode == .fixed && savedDock.dockTimeZone == "America/Los_Angeles")
+        let legacy = try JSONDecoder().decode(DisplayPreferences.self, from: Data("{\"showDockIcon\":true,\"dockContent\":\"iconOnly\"}".utf8))
+        assert(legacy.dockTimeZoneMode == .followDefault && legacy.dockContent == .iconOnly)
+        dockPreferences.dockTimeZone = "Invalid/Zone"
+        assert(clock.makeDock(policy: dockPolicy, preferences: dockPreferences, date: epoch, system: system).time == "08:00")
         preferences.showDockIcon = true; preferences.dockContent = .city
         preferences.showWindowBadge = true
+        preferences.debugAlwaysShowWindowBadge = true
+        #if DEBUG
+        assert(preferences.forceWindowBadge)
+        #else
+        assert(!preferences.forceWindowBadge)
+        #endif
         preferences.favoriteTimeZones = ["Asia/Hong_Kong", "Etc/UTC"]
         let restored = try JSONDecoder().decode(DisplayPreferences.self, from: JSONEncoder().encode(preferences))
         let defaults = try JSONDecoder().decode(DisplayPreferences.self, from: Data("{}".utf8))

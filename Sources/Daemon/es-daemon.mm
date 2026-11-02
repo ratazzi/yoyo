@@ -201,7 +201,7 @@ static void cleanup_flag(NSString *path) {
 static NSMutableDictionary *new_record(const es_process_t *process, TZSession *session) {
     return [@{@"pid": @(audit_token_to_pid(process->audit_token)), @"pidversion": @(process->audit_token.val[7]),
         @"uid": @(audit_token_to_euid(process->audit_token)), @"parent_pid": @(process->ppid),
-        @"path": token(process->executable->path), @"session": session, @"loaded": @NO, @"environment_only": @YES,
+        @"path": token(process->executable->path), @"session": session, @"loaded": @NO, @"environment_only": @NO,
         @"start_sec": @(process->start_time.tv_sec), @"start_usec": @(process->start_time.tv_usec)} mutableCopy];
 }
 static NSMutableDictionary *record_for(const es_process_t *process) {
@@ -298,9 +298,9 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
             try {
                 if (deadline_seconds(message) < 0.25) throw std::runtime_error("insufficient AUTH_EXEC deadline remaining");
                 StartupTimezone setting;
-                setting.inject_library = false;
+                setting.inject_library = true;
                 setting.zone = fixed ? session.zone.UTF8String : "";
-                record[@"environment_only"] = @YES;
+                record[@"environment_only"] = @(!setting.inject_library);
                 TZSession *previous = parent[@"session"]; setting.previous_zone = previous.zone.UTF8String ?: "";
                 for (NSString *name in session.baseline) setting.baseline[name.UTF8String] = [session.baseline[name] UTF8String];
                 if (fixed) setting.extra["TIMEZONE_LAB_SESSION"] = session.identifier.UTF8String;
@@ -315,7 +315,7 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
                     setting.extra["TIMEZONE_LAB_TRACE_CONTROL"] = tracePath.UTF8String;
                 }
                 configure_startup_environment(audit_token_to_pid(target->audit_token), library.UTF8String, setting);
-                detail = fixed ? @"TZ startup environment applied; no library injection requested" : @"Inherited timezone environment removed";
+                detail = fixed ? @"Startup environment prepared; awaiting hooks_loaded" : @"Inherited timezone environment removed";
             } catch (const std::exception &error) { allowed = NO; detail = @(error.what()); }
         }
     }
@@ -367,6 +367,7 @@ static void process_message(const es_message_t *message) {
         if (record) {
             const es_process_t *child = message->event.fork.child;
             NSMutableDictionary *copy = new_record(child, [record[@"session"] copy]); copy[@"loaded"] = record[@"loaded"];
+            copy[@"environment_only"] = record[@"environment_only"] ?: @NO;
             if (record[@"trace_control"]) copy[@"trace_control"] = record[@"trace_control"];
             records[key(child->audit_token)] = copy; log_event(copy, @"fork", nil); persist();
         }
@@ -525,10 +526,53 @@ static void test_startup_confirmation(void) {
     puts("Startup confirmation: exact audit generation, receipt validation, idempotence and unknown state: PASS");
 }
 
+static void test_session_recovery(void) {
+    char temporary[] = "/private/tmp/timezone-recovery-XXXXXX";
+    if (!mkdtemp(temporary)) throw std::runtime_error("cannot create recovery test directory");
+    directory = @(temporary); owner = getuid(); records = [NSMutableDictionary new];
+    struct proc_bsdinfo info; char path[PROC_PIDPATHINFO_MAXSIZE];
+    if (proc_pidinfo(getpid(), PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != sizeof(info) ||
+        proc_pidpath(getpid(), path, sizeof(path)) <= 0) throw std::runtime_error("cannot identify recovery fixture");
+    policy = [TZProgramPolicy policyWithDictionary:@{@"es_enabled": @YES, @"rules": @[
+        @{@"id": @"recovery", @"kind": @"cli", @"pattern": @(path), @"mode": @"fixed", @"zone": @"Asia/Tokyo"}
+    ]} error:nil];
+    TZSession *session = [policy decisionForPath:@(path) invokedPath:nil script:nil parent:nil].session;
+    session.baseline = @{@"TZ": @"Etc/UTC"};
+    NSString *identifier = session.identifier;
+    NSMutableDictionary *record = [@{@"pid": @(getpid()), @"pidversion": @1, @"uid": @(owner), @"parent_pid": @(getppid()),
+        @"path": @(path), @"session": session, @"loaded": @NO, @"environment_only": @YES,
+        @"start_sec": @(info.pbi_start_tvsec), @"start_usec": @(info.pbi_start_tvusec)} mutableCopy];
+    records[@"valid"] = record;
+    NSMutableDictionary *wrongStart = [record mutableCopy]; wrongStart[@"pidversion"] = @2;
+    wrongStart[@"start_sec"] = @(info.pbi_start_tvsec + 1); records[@"reused-pid"] = wrongStart;
+    NSMutableDictionary *wrongPath = [record mutableCopy]; wrongPath[@"pidversion"] = @3;
+    wrongPath[@"path"] = @"/not-the-original-executable"; records[@"wrong-path"] = wrongPath;
+    persist();
+    [records removeAllObjects];
+    // A changed current rule must not replace the persisted launch-time choice.
+    policy = [TZProgramPolicy policyWithDictionary:@{@"es_enabled": @YES, @"rules": @[
+        @{@"id": @"recovery", @"kind": @"cli", @"pattern": @(path), @"mode": @"fixed", @"zone": @"Europe/Paris"}
+    ]} error:nil];
+    restore();
+    NSDictionary *restored = records.allValues.firstObject;
+    TZSession *recovered = restored[@"session"];
+    BOOL valid = records.count == 1 && [recovered.identifier isEqual:identifier] &&
+        [recovered.zone isEqual:@"Asia/Tokyo"] && [recovered.baseline[@"TZ"] isEqual:@"Etc/UTC"] &&
+        [recovered.ancestorRules containsObject:@"recovery"] && [restored[@"environment_only"] boolValue] &&
+        [public_record(restored)[@"confirmation"] isEqual:@"not_requested"];
+    TZDecision *child = [policy decisionForPath:@"/outside-child" invokedPath:nil script:nil parent:recovered];
+    valid &= child.inherited && [child.session.zone isEqual:@"Asia/Tokyo"];
+    [records removeAllObjects]; persist(); restore();
+    valid &= records.count == 0; // Current rules never synthesize a past launch session.
+    [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
+    if (!valid) throw std::runtime_error("session recovery validation failed");
+    puts("Session recovery: launch choice and baseline retained, stale identities rejected, unruled parents unchanged: PASS");
+}
+
 int main(int argc, const char **argv) {
     @autoreleasepool {
         if (argc == 2 && !strcmp(argv[1], "--self-test")) {
-            try { test_startup_stack_rewrite(); puts("startup stack preservation: PASS"); test_startup_confirmation(); return 0; }
+            try { test_startup_stack_rewrite(); puts("startup stack preservation: PASS"); test_startup_confirmation(); test_session_recovery(); return 0; }
             catch (const std::exception &e) { fprintf(stderr, "%s\n", e.what()); return 1; }
         }
         if (argc != 2) return 2;

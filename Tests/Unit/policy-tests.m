@@ -33,6 +33,20 @@ int main(void) {
         assert(![policy decisionForPath:@"/usr/bin/unmatched" invokedPath:nil script:nil parent:nil].session);
         TZProgramPolicy *off = [TZProgramPolicy policyWithDictionary:@{@"rules": rules, @"es_enabled": @NO} error:nil];
         assert(![off decisionForPath:@"/opt/tools/3/bin/python3" invokedPath:nil script:nil parent:nil].session);
+        // Adding an app rule cannot create a launch session for an existing parent.
+        NSString *lateApp = @"/Applications/LateRule.app";
+        TZProgramPolicy *before = [TZProgramPolicy policyWithDictionary:@{@"rules": @[]} error:nil];
+        TZDecision *existingParent = [before decisionForPath:[lateApp stringByAppendingPathComponent:@"Contents/MacOS/Main"] invokedPath:nil script:nil parent:nil];
+        assert(!existingParent.session);
+        TZProgramPolicy *after = [TZProgramPolicy policyWithDictionary:@{@"rules": @[
+            rule(@"late-app", @"app", lateApp, @"fixed", @"Asia/Tokyo")]} error:nil];
+        TZDecision *outsideAfterAdd = [after decisionForPath:@"/opt/tools/outside" invokedPath:nil script:nil parent:existingParent.session];
+        assert(!outsideAfterAdd.session);
+        TZDecision *helperAfterAdd = [after decisionForPath:[lateApp stringByAppendingPathComponent:@"Contents/Helpers/Worker"] invokedPath:nil script:nil parent:existingParent.session];
+        assert(!helperAfterAdd.inherited && [helperAfterAdd.session.zone isEqual:@"Asia/Tokyo"]);
+        TZDecision *grandchildAfterAdd = [after decisionForPath:@"/opt/tools/outside" invokedPath:nil script:nil parent:helperAfterAdd.session];
+        assert(grandchildAfterAdd.inherited && [grandchildAfterAdd.session.identifier isEqual:helperAfterAdd.session.identifier]);
+        assert(!existingParent.session);
         assert(![TZProgramPolicy policyWithDictionary:@{@"rules": @[rule(@"bad", @"cli", @"/tmp/x", @"fixed", @"Bogus/Zone")]} error:nil]);
         TZProgramPolicy *migrated = [TZProgramPolicy policyWithDictionary:@{@"targets": @[@"/bin/date"], @"zone": @"Asia/Tokyo"} error:nil];
         assert(migrated.rules.count == 1 && [migrated.rules[0].mode isEqual:@"fixed"]);
@@ -51,6 +65,7 @@ int main(void) {
         assert([roundtrip.defaultMode isEqual:@"fixed"] && [roundtrip.defaultZone isEqual:@"Europe/London"]);
         puts("Rule precedence, .app scope, glob, default, session inheritance and legacy migration: PASS");
         puts("Global default, system exclusion, descendant inheritance and persistence: PASS");
+        puts("Late app rule: existing parent unchanged, outside child unchanged, new helper matched and descendants inherit: PASS");
     }
     return 0;
 }

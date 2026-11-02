@@ -16,7 +16,7 @@ struct RuleEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                ProgramIcon(path: rule.pattern, size: 32)
+                ProgramIcon(path: rule.pattern, kind: rule.kind, size: 32)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(existing ? "Edit Program Rule" : "Add Program Rule").font(.headline)
                     Text("Choose how this program uses time zones.").font(.caption).foregroundStyle(.secondary)
@@ -129,6 +129,14 @@ struct SettingsView: View {
                     }
                     Toggle("Show Dock Icon", isOn: $display.showDockIcon).toggleStyle(.checkbox)
                     if display.showDockIcon {
+                        Picker("Dock Time Zone", selection: $display.dockTimeZoneMode) {
+                            Text("Follow Default Time Zone").tag(DockTimeZoneMode.followDefault)
+                            Text("System Time Zone").tag(DockTimeZoneMode.system)
+                            Text("Custom Time Zone").tag(DockTimeZoneMode.fixed)
+                        }
+                        if display.dockTimeZoneMode == .fixed {
+                            TimeZoneField(selection: $display.dockTimeZone).frame(height: 26)
+                        }
                         Picker("Dock Content", selection: $display.dockContent) {
                             ForEach(ClockContent.allCases) { content in Text(content.title).tag(content) }
                         }
@@ -146,8 +154,16 @@ struct SettingsView: View {
                                 Text(label).monospacedDigit().lineLimit(1)
                             } else { Image(systemName: "globe").foregroundStyle(.secondary) }
                         }
+                        if display.showDockIcon {
+                            let dock = clockFactory.makeDock(policy: previewPolicy, preferences: display, date: context.date)
+                            HStack {
+                                Text("Dock Preview").font(.callout).foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(dock.city) \(dock.time)").monospacedDigit().lineLimit(1)
+                            }
+                        }
                     }
-                    Text("Time and city are hidden when the default matches the system.")
+                    Text("Menu bar text is hidden when the default matches the system.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(12)
             }
@@ -156,6 +172,11 @@ struct SettingsView: View {
                     Toggle("Show Time Zone Near Active Window", isOn: $display.showWindowBadge).toggleStyle(.checkbox)
                     Text("Requires Accessibility access and confirmed injection. Hidden in full screen; clicks pass through.")
                         .font(.caption).foregroundStyle(.secondary)
+                    #if DEBUG
+                    Toggle("Always Show Badge (Debug)", isOn: $display.debugAlwaysShowWindowBadge).toggleStyle(.checkbox)
+                    Text("Shows Debug badges on visible windows with a known non-system launch time zone, including unfocused windows. Fully covered, minimized and other-desktop windows are excluded.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    #endif
                     HStack {
                         Button("Preview Badge") { NotificationCenter.default.post(name: .init("PreviewWindowBadge"), object: nil) }
                         Button("Accessibility Settings…") {
@@ -195,6 +216,9 @@ struct SettingsView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
+                    if display.dockTimeZoneMode == .fixed && TimeZone(identifier: display.dockTimeZone) == nil {
+                        validation = "Choose a valid Dock time zone."; return
+                    }
                     var candidate = store.policy; candidate.default_mode = defaultMode; candidate.default_zone = zone
                     if store.save(candidate) && store.saveDisplayPreferences(display) { dismiss() }
                     else { validation = store.errorMessage; store.errorMessage = nil }

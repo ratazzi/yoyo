@@ -14,9 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusDisplay: StatusDisplayController?
     private var statusMenu: StatusMenuController?
     private var windowBadge: WindowBadgeController?
+    private var surgeBridge: SurgeBridge?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
+        let socket = store.stateDirectory.appendingPathComponent("control.sock").path
+        do {
+            surgeBridge = try SurgeBridge(auditDirectory: store.stateDirectory, sessionLookup: { pid in
+                let reply = TZControl(socket, ["command": "process", "pid": pid])
+                if reply == nil || reply?["error"] != nil { return ["_lookup_error": "daemon_unavailable"] }
+                return reply?["process"] as? [String: Any]
+            })
+        } catch { FileHandle.standardError.write(Data("Surge bridge: \(error)\n".utf8)) }
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "TZ"
         let menu = NSMenu()
@@ -57,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         showMain()
     }
+    func applicationWillTerminate(_ notification: Notification) { surgeBridge?.stop() }
     @objc func showMain() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
     @objc func showTimeZones() {
         // Open the actual status-item menu after the application menu finishes tracking.

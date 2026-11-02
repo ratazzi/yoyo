@@ -5,6 +5,7 @@ import Combine
 final class StatusDisplayController {
     private let item: NSStatusItem
     private let factory = ClockPresentationFactory()
+    private let dockFactory = ClockPresentationFactory()
     private var policy = PolicyDocument()
     private var preferences = DisplayPreferences()
     private var subscription: AnyCancellable?
@@ -50,15 +51,20 @@ final class StatusDisplayController {
         }
         item.button?.toolTip = presentation.tooltip
         item.button?.setAccessibilityLabel(presentation.label(for: preferences.menuBarContent) ?? "Yoyo")
-        let dockKey = "\(preferences.showDockIcon):\(preferences.dockContent.rawValue):\(presentation.zoneIdentifier):\(presentation.label(for: preferences.dockContent) ?? "")"
+        let dockPresentation = dockFactory.makeDock(policy: policy, preferences: preferences)
+        let dockLabel = dockPresentation.label(for: preferences.dockContent)
+        let dockKey = "\(preferences.showDockIcon):\(preferences.dockContent.rawValue):\(dockPresentation.zoneIdentifier):\(dockLabel ?? dockPresentation.clockDigits)"
         guard lastDockKey != dockKey else { return }
         lastDockKey = dockKey
-        if preferences.showDockIcon && presentation.label(for: preferences.dockContent) != nil {
+        if preferences.showDockIcon && dockLabel != nil {
             dockView.frame = NSRect(origin: .zero, size: NSApp.dockTile.size)
-            dockView.presentation = presentation; dockView.content = preferences.dockContent
+            dockView.presentation = dockPresentation; dockView.content = preferences.dockContent
             NSApp.dockTile.contentView = dockView
         } else if preferences.showDockIcon {
             dockIconView.frame = NSRect(origin: .zero, size: NSApp.dockTile.size)
+            dockIconView.digits = dockPresentation.clockDigits
+            dockIconView.setAccessibilityLabel("\(dockPresentation.city) \(dockPresentation.time)")
+            dockIconView.needsDisplay = true
             NSApp.dockTile.contentView = dockIconView
         } else { NSApp.dockTile.contentView = nil }
         NSApp.dockTile.badgeLabel = nil
@@ -68,8 +74,10 @@ final class StatusDisplayController {
 
 @MainActor
 private final class DockArtworkView: NSView {
+    var digits = "0000"
+
     override func draw(_ dirtyRect: NSRect) {
-        TimezoneArtwork.flipClock(in: bounds)
+        TimezoneArtwork.flipClock(in: bounds, digits: digits)
     }
 }
 
