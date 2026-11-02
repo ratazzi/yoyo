@@ -11,7 +11,7 @@ enum ProcessInspector {
               let directory = config["state_directory"] as? String else {
             FileHandle.standardError.write(Data("Usage: Yoyo --inspect-process PID\n".utf8)); return 2
         }
-        let response = TZControl(directory + "/control.sock", ["command": "process", "pid": pid])
+        let response = TZControl((directory as NSString).expandingTildeInPath + "/control.sock", ["command": "process", "pid": pid])
             ?? ["error": "Background service unavailable"]
         guard let result = try? JSONSerialization.data(withJSONObject: response, options: [.sortedKeys]) else { return 2 }
         FileHandle.standardOutput.write(result + Data("\n".utf8))

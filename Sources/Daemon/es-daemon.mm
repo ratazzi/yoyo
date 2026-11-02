@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <pwd.h>
 
 // All policy, process and pending authorization state belongs to engineQueue.
 @interface TZPending : NSObject
@@ -592,7 +593,19 @@ int main(int argc, const char **argv) {
         NSMutableArray *targets = [NSMutableArray new];
         for (NSString *target in configuration[@"targets"]) [targets addObject:target.isAbsolutePath ? target : [bundle stringByAppendingPathComponent:target]];
         resolved[@"targets"] = targets; configuration = resolved;
-        directory = configuration[@"state_directory"]; if (!directory.isAbsolutePath || !library.isAbsolutePath) return 2;
+        directory = configuration[@"state_directory"];
+        if ([directory hasPrefix:@"~/"]) {
+            // A launch daemon's home is root's; use the logged-in user's state directory.
+            struct stat console;
+            if (stat("/dev/console", &console) || console.st_uid == 0) return 2;
+            struct passwd *user = getpwuid(console.st_uid);
+            if (!user) return 2;
+            directory = [@(user->pw_dir) stringByAppendingPathComponent:[directory substringFromIndex:2]];
+            // The UI creates this directory before enabling its background service.
+            struct stat existing;
+            if (stat(directory.fileSystemRepresentation, &existing) || existing.st_uid != console.st_uid) return 2;
+        }
+        if (!directory.isAbsolutePath || !library.isAbsolutePath) return 2;
         [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
         struct stat info; if (stat(directory.fileSystemRepresentation, &info)) return 2; owner = info.st_uid;
         socketPath = [directory stringByAppendingPathComponent:@"control.sock"];

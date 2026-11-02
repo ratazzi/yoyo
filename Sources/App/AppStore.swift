@@ -26,7 +26,8 @@ final class AppStore: ObservableObject {
     init() {
         let configURL = Bundle.main.resourceURL!.appendingPathComponent("lab-config.json")
         let config = (try? Data(contentsOf: configURL)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        stateDirectory = URL(fileURLWithPath: config?["state_directory"] as? String ?? NSTemporaryDirectory() + "Yoyo")
+        let statePath = config?["state_directory"] as? String ?? NSTemporaryDirectory() + "Yoyo"
+        stateDirectory = URL(fileURLWithPath: (statePath as NSString).expandingTildeInPath)
         try? FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
         do {
             let data = try Data(contentsOf: stateDirectory.appendingPathComponent("policy.json"))
