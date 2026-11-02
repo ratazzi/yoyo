@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build macOS release
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        uses: jdx/mise-action@v4
+        with:
+          cache: true
+
+      - name: Import signing certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+
+      - name: Build macOS release
+        env:
+          DEVELOPER_ID_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ES_PROVISIONING_PROFILE_BASE64: ${{ secrets.ES_PROVISIONING_PROFILE_BASE64 }}
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+          NOTARIZE_PASSWORD: ${{ secrets.NOTARIZE_PASSWORD }}
+        run: mise run release
+
+      - name: Upload notarized DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: Yoyo-macos-arm64
+          path: build/Yoyo-*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download notarized DMG
+        uses: actions/download-artifact@v8
+        with:
+          name: Yoyo-macos-arm64
+          path: artifacts
+
+      - name: Prepare nightly asset
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+        run: mv artifacts/Yoyo-*.dmg artifacts/Yoyo-nightly.dmg
+
+      - name: Move nightly tag to this build
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" >/dev/null 2>&1; then
+            gh api \
+              --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/nightly" \
+              -f sha="${GITHUB_SHA}" \
+              -F force=true
+          else
+            gh api \
+              --method POST \
+              "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/nightly" \
+              -f sha="${GITHUB_SHA}"
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            gh release create "$GITHUB_REF_NAME" artifacts/Yoyo-*.dmg --repo "$GITHUB_REPOSITORY" --draft --generate-notes
+          else
+            gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create nightly --repo "$GITHUB_REPOSITORY" --title 'Yoyo Nightly' --notes 'Signed and notarized master build.' --prerelease --latest=false
+            gh release upload nightly artifacts/Yoyo-nightly.dmg --repo "$GITHUB_REPOSITORY" --clobber
+          fi

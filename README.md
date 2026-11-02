@@ -33,17 +33,17 @@ Yoyo also provides a local process-timezone API at `127.0.0.1:47643` while the a
 
 ## Build
 
-Requires macOS, full Xcode with SwiftUI compiler plugins, and native Apple Silicon for the validated injection path. No third-party build dependencies are required.
+Requires macOS, full Xcode with SwiftUI compiler plugins, and native Apple Silicon for the validated injection path. Build tasks use mise and Hola (`mise install`).
 
 ```sh
-make test
-SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' make build
+mise run test
+SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' mise run build-app
 open build/Yoyo.app
 ```
 
 Without `SIGN_IDENTITY`, the build is ad-hoc and cannot register an ES client. `ES_PROVISIONING_PROFILE` overrides the profile path. The current local development helper uses the existing Floria ES profile; see [Running and signing](docs/Running.md).
 
-Stop the background service in Settings before replacing the signed bundle. Wait for the build to finish before reopening it. `build-lab.sh` remains a compatibility entry point for `scripts/build.sh`.
+Stop the background service in Settings before replacing the signed bundle. Wait for the build to finish before reopening it. `make build`, `build-lab.sh`, and `scripts/build.sh` forward to `mise run build-app`. Run `mise run package-dmg` for a Release build in `build/Yoyo.dmg`; set `OUTPUT_DMG` to choose another path. Existing images are not overwritten. Tests run separately with `mise run test`. `mise run release` builds with Developer ID and Hardened Runtime, notarizes the DMG, staples the ticket and verifies Gatekeeper acceptance. Release builds use the logged-in user’s `~/Library/Application Support/Yoyo` directory instead of the build machine’s paths. See [CI release setup](docs/Running.md#github-releases).
 
 Local builds default to `BUILD_CONFIGURATION=Debug`. In Settings → Appearance, **Always Show Badge (Debug)** keeps clearly labeled badges on visible normal application windows with a validated non-system launch time zone, including unfocused windows and sessions whose hooks are not confirmed. System-default and unknown sessions have no badge. Badges are removed for closed/minimized, fully covered and other-desktop windows. Placement avoids higher windows and falls back inside an uncovered part of the owning window when no outside space is available. Normal mode still requires Accessibility access and follows only the focused window. Set `BUILD_CONFIGURATION=Release` to omit the switch and ignore its saved preference.
 

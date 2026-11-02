@@ -15,6 +15,21 @@ The build defaults to `/Applications/Xcode.app/Contents/Developer`; `DEVELOPER_D
 
 The ES provisioning profile defaults to `/Users/ratazzi/workspace/floria/provisioning/Floria_Endpoint_Security_Developer_ID.provisionprofile`. Set `ES_PROVISIONING_PROFILE` for another location. The helper retains that profile's `floria.hola.ac.endpoint-security` identifier and Team ID; the main app is `yoyo.hola.ac`, with launchd label `yoyo.hola.ac.daemon`. Floria itself is not modified or replaced.
 
+## GitHub releases
+
+The `Release` workflow runs `mise run release` on macOS ARM64. Pushing a `v*` tag creates a draft GitHub release; manually running it on `master` updates the `nightly` prerelease. Only a signed, notarized, stapled and Gatekeeper-verified DMG is uploaded. The separate CI workflow runs unit tests on pushes and pull requests.
+
+Configure these repository Actions secrets (the same certificate and notary credentials as Floria):
+
+- `DEVELOPER_ID_CERTIFICATE_P12`, `DEVELOPER_ID_CERTIFICATE_PASSWORD`
+- `DEVELOPER_ID_IDENTITY`, `APPLE_TEAM_ID`
+- `ES_PROVISIONING_PROFILE_BASE64`: the base64-encoded Endpoint Security Developer ID profile, matching `Resources/Daemon.entitlements` and the helper identifier.
+- `NOTARIZE_APPLE_ID`, `NOTARIZE_PASSWORD`
+
+The profile is decoded only for the build and removed afterward. Signed code uses Hardened Runtime and secure timestamps. `mise run notarize-dmg path/to/Yoyo.dmg` retries notarization without rebuilding, using the same notary environment variables.
+
+Release builds store state in `~/Library/Application Support/Yoyo`; the UI creates this directory before enabling the service. The daemon resolves the home of the logged-in console user at startup. Switching users while the service is running requires restarting it for the new user. Service stdout/stderr go to `/var/log/yoyo-stdout.txt` and `/var/log/yoyo-stderr.txt`.
+
 ## Service setup
 
 Open Settings and enable **Background Service**. Approve Login Items and Full Disk Access if macOS requires them. The helper bundle is:

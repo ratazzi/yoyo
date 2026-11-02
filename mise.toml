@@ -1,0 +1,29 @@
+[tools]
+"github:ratazzi/hola" = "0.4.0"
+
+[tasks.build-app]
+description = "Build and sign Yoyo.app"
+run = "hola run build_app"
+
+[tasks.package-dmg]
+description = "Build a release DMG"
+env.BUILD_CONFIGURATION = "Release"
+run = "hola run package_dmg"
+
+[tasks.test]
+run = "zsh scripts/test-unit.sh"
+
+[tasks.release]
+description = "Build, sign, notarize and verify the release DMG"
+run = "hola run release"
+
+[tasks.release.env]
+DEVELOPER_ID_IDENTITY = { required = true, redact = true }
+APPLE_TEAM_ID = { required = true, redact = true }
+ES_PROVISIONING_PROFILE_BASE64 = { required = true, redact = true }
+NOTARIZE_APPLE_ID = { required = true, redact = true }
+NOTARIZE_PASSWORD = { required = true, redact = true }
+
+[tasks.notarize-dmg]
+usage = 'arg "<dmg>" env="DMG_PATH"'
+run = "hola run notarize_dmg"

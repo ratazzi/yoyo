@@ -1,0 +1,117 @@
+APP = "build/Yoyo.app"
+ENV["DEVELOPER_DIR"] ||= "/Applications/Xcode.app/Contents/Developer"
+
+def q(value)
+  "'" + value.to_s.gsub("'", "'\\\\''") + "'"
+end
+
+def notarize(dmg)
+  resources.macos_notarize dmg do
+    apple_id ENV.fetch("NOTARIZE_APPLE_ID")
+    team_id ENV.fetch("APPLE_TEAM_ID")
+    password ENV.fetch("NOTARIZE_PASSWORD")
+    staple true
+    validate true
+    assess true
+  end
+end
+
+desc "Build and sign Yoyo.app"
+task(:build_app) { build_app }
+desc "Build a DMG installer"
+task(:package_dmg) { package_dmg }
+desc "Notarize and verify an existing DMG"
+task(:notarize_dmg) { notarize(ENV.fetch("DMG_PATH")) }
+
+desc "Build, sign, notarize, staple and verify the release DMG"
+task :release do
+  ENV["SIGN_IDENTITY"] = ENV.fetch("DEVELOPER_ID_IDENTITY")
+  raise "Release requires Developer ID signing" if ["", "-"].include?(ENV["SIGN_IDENTITY"])
+  ENV["BUILD_CONFIGURATION"] = "Release"
+  ENV["STATE_DIRECTORY"] = "~/Library/Application Support/Yoyo"
+  ENV["OUTPUT_DMG"] ||= "build/Yoyo-#{ENV.fetch("GITHUB_REF_NAME", "release")}.dmg"
+  profile = "#{ENV.fetch("RUNNER_TEMP", "/tmp")}/Yoyo.provisionprofile"
+  begin
+    sh "umask 077 && printenv ES_PROVISIONING_PROFILE_BASE64 | base64 -D -o #{q profile}"
+    ENV["ES_PROVISIONING_PROFILE"] = profile
+    notarize(package_dmg)
+  ensure
+    rm_f(profile)
+  end
+end
+
+def build_app
+  configuration = ENV.fetch("BUILD_CONFIGURATION", "Debug")
+  raise "BUILD_CONFIGURATION must be Debug or Release" unless ["Debug", "Release"].include?(configuration)
+  swift_flags = configuration == "Debug" ? "-D DEBUG" : "-O"
+  sign_identity = ENV.fetch("SIGN_IDENTITY", "-")
+  profile = ENV.fetch("ES_PROVISIONING_PROFILE", "/Users/ratazzi/workspace/floria/provisioning/Floria_Endpoint_Security_Developer_ID.provisionprofile")
+  raise "ES provisioning profile not found" if sign_identity != "-" && !File.file?(profile)
+  contents = "#{APP}/Contents"
+  helper = "#{contents}/Library/LaunchServices/YoyoDaemon.app"
+  rm_rf(APP)
+  ["#{contents}/Resources/bin", "#{contents}/MacOS", "#{helper}/Contents/MacOS", "#{contents}/Library/LaunchDaemons", "build/state"].each { mkdir_p(_1) }
+  sh <<~SH
+    set -eu
+    /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/render-app-icons.swift -framework AppKit -o build/render-app-icons
+    build/render-app-icons build/icon-assets
+    /usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "#{contents}/Resources/YoyoFlipClock.icns"
+    cp build/icon-assets/MenuBarTemplate.png "#{contents}/Resources/MenuBarTemplate.png"
+    /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/program-policy.m -o build/program-policy.o
+    /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/Shared/control-channel.m -o build/control-channel.o
+    /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/App/AppBridge.m -o build/app-bridge.o
+    /usr/bin/clang -c Sources/Shared/timezone-display.c -o build/timezone-display.o
+    /usr/bin/clang -fobjc-arc -c Sources/App/SurgeSocketPrototype.m -o build/surge-socket-prototype.o
+    /usr/bin/swiftc #{swift_flags} -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o build/surge-socket-prototype.o -o "#{contents}/MacOS/Yoyo"
+    /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/program-policy.o build/control-channel.o -o "#{helper}/Contents/MacOS/timezone-es-daemon"
+    /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "#{contents}/Resources/bin/timezone-probe"
+    /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "#{contents}/Resources/bin/cli-fixture"
+    /usr/bin/clang Tests/Fixtures/cli-start-paths.c -o "#{contents}/Resources/bin/cli-start-paths"
+    /usr/bin/clang -Wno-deprecated-declarations Tests/Fixtures/file-hook-check.c -o "#{contents}/Resources/bin/file-hook-check"
+    /usr/bin/clang -fobjc-arc -framework Foundation Tests/Integration/terminal-chain-policy.m -o build/terminal-chain-policy
+    /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -arch arm64 -arch arm64e -dynamiclib -framework Foundation -framework CoreFoundation -licucore Sources/Injection/enforced.m Sources/Injection/timezone-files.c Sources/Injection/runtime-trace.c -o "#{contents}/Resources/libenforced.dylib"
+  SH
+  sh "cp Resources/Info.plist #{contents}/Info.plist && cp Resources/Daemon-Info.plist #{helper}/Contents/Info.plist"
+  sh "plutil -replace CFBundleVersion -string #{q ENV.fetch("GITHUB_RUN_NUMBER", "1")} #{contents}/Info.plist"
+  service = "#{contents}/Library/LaunchDaemons/yoyo.hola.ac.daemon.plist"
+  sh "cp Resources/LaunchDaemon.plist #{service}"
+  state = ENV.fetch("STATE_DIRECTORY", "#{Dir.pwd}/build/state")
+  config = JSON.generate({
+    "zone" => ENV.fetch("TIMEZONE_LAB_ZONE", "Asia/Tokyo"), "app_bundle_relative_paths" => true,
+    "library" => "Contents/Resources/libenforced.dylib", "state_directory" => state,
+    "targets" => ["Contents/Resources/bin/timezone-probe", "Contents/Resources/bin/cli-fixture"]
+  })
+  sh "printf '%s' #{q config} > #{contents}/Resources/lab-config.json"
+  logs = state.start_with?("~/") ? "/var/log/yoyo" : state + "/service"
+  sh "plutil -insert StandardOutPath -string #{q logs + '-stdout.txt'} #{service}"
+  sh "plutil -insert StandardErrorPath -string #{q logs + '-stderr.txt'} #{service}"
+  sh "cp #{q profile} #{helper}/Contents/embedded.provisionprofile" if sign_identity != "-"
+  (Dir.glob("#{contents}/Resources/bin/*") + ["#{contents}/Resources/libenforced.dylib", helper, APP]).each do |path|
+    resources.macos_codesign path do
+      identity sign_identity
+      hardened_runtime sign_identity != "-"
+      entitlements "Resources/Daemon.entitlements" if path == helper && sign_identity != "-"
+    end
+  end
+  sh "codesign --verify --deep --strict #{APP}"
+  sh "#{helper}/Contents/MacOS/timezone-es-daemon --self-test"
+  puts "Built: #{APP}"
+end
+
+def package_dmg
+  output = ENV.fetch("OUTPUT_DMG", "build/Yoyo.dmg")
+  raise "Refusing to overwrite existing DMG: #{output}" if File.exist?(output)
+  build_app
+  mkdir_p(File.dirname(output))
+  resources.macos_dmg output do
+    source APP
+    volume_name "Yoyo"
+  end
+  if ENV.fetch("SIGN_IDENTITY", "-") != "-"
+    resources.macos_codesign output do
+      identity ENV.fetch("SIGN_IDENTITY")
+      hardened_runtime false
+    end
+  end
+  output
+end
