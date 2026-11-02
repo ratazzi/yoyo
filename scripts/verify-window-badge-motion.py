@@ -10,18 +10,18 @@ import uuid
 
 root = Path(__file__).resolve().parent.parent
 os.chdir(root)
-policy_path = root / "build/state/policy.json"
+policy_path = root / "build/state/policy.plist"
 identifier = "test-badge-motion-" + uuid.uuid4().hex
 
 
 def update_rule(rule=None):
-    policy = json.loads(policy_path.read_text())
+    policy = plistlib.loads(policy_path.read_bytes())
     policy["rules"] = [entry for entry in policy["rules"] if entry["id"] != identifier]
     if rule:
         policy["rules"].append(rule)
     mode = policy_path.stat().st_mode & 0o777
-    with tempfile.NamedTemporaryFile(mode="w", dir=policy_path.parent, delete=False) as output:
-        json.dump(policy, output)
+    with tempfile.NamedTemporaryFile(mode="wb", dir=policy_path.parent, delete=False) as output:
+        plistlib.dump(policy, output)
         temporary = Path(output.name)
     temporary.chmod(mode)
     temporary.replace(policy_path)

@@ -10,13 +10,13 @@ static void require(BOOL condition, NSString *message) {
 
 static NSMutableDictionary *read_policy(NSString *path) {
     NSData *data = [NSData dataWithContentsOfFile:path];
-    NSMutableDictionary *value = data ? [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil] : nil;
+    NSMutableDictionary *value = data ? [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListMutableContainers format:nil error:nil] : nil;
     require([value isKindOfClass:NSMutableDictionary.class], @"Cannot read policy");
     return value;
 }
 
 static void write_policy(NSString *path, NSDictionary *value) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:nil];
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListXMLFormat_v1_0 options:0 error:nil];
     require(data && [data writeToFile:path options:NSDataWritingAtomic error:nil], @"Cannot write policy");
 }
 
@@ -157,7 +157,7 @@ int main(int argc, const char **argv) {
             else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 2; }
         }
         NSString *root = NSFileManager.defaultManager.currentDirectoryPath;
-        NSString *policyPath = [root stringByAppendingPathComponent:@"build/state/policy.json"];
+        NSString *policyPath = [root stringByAppendingPathComponent:@"build/state/policy.plist"];
         NSString *statePath = [root stringByAppendingPathComponent:@"build/state/daemon-state.json"];
         NSString *base = [root stringByAppendingPathComponent:@"build/tests/late-rule"];
         NSString *app = [base stringByAppendingPathComponent:@"LateRule.app"];

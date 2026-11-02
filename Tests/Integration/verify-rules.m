@@ -9,7 +9,7 @@ static NSDictionary *rule(NSString *name, NSString *pattern, NSString *mode, NSS
         @"zone": zone, @"enabled": @YES, @"logging": @(logging)};
 }
 static BOOL apply_value(NSDictionary *value) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListXMLFormat_v1_0 options:0 error:nil];
     if (![data writeToFile:statePath options:NSDataWritingAtomic error:nil]) return NO;
     // The daemon reloads once a second. Allow two ticks before starting the fixture.
     usleep(2100000); return YES;
@@ -25,9 +25,9 @@ static BOOL run(NSString *name, NSString *executable, NSArray *arguments) {
 int main(void) {
     @autoreleasepool {
         root = NSFileManager.defaultManager.currentDirectoryPath;
-        statePath = [root stringByAppendingPathComponent:@"build/state/policy.json"];
+        statePath = [root stringByAppendingPathComponent:@"build/state/policy.plist"];
         NSData *original = [NSData dataWithContentsOfFile:statePath]; if (!original) return 2;
-        NSDictionary *saved = [NSJSONSerialization JSONObjectWithData:original options:0 error:nil];
+        NSDictionary *saved = [NSPropertyListSerialization propertyListWithData:original options:0 format:nil error:nil];
         TZProgramPolicy *policy = [TZProgramPolicy policyWithDictionary:saved error:nil];
         entries = [policy.dictionary[@"rules"] mutableCopy];
         NSString *base = [root stringByAppendingPathComponent:@"build/chain"], *parent = [base stringByAppendingPathComponent:@"parent"];

@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "../Shared/program-policy.h"
 #include "../Shared/timezone-display.h"
 NSDictionary *TZNormalizePolicy(NSDictionary *value);
 NSString *TZPolicyError(NSDictionary *value);

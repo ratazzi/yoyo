@@ -2,6 +2,26 @@
 #import "timezone-policy.h"
 #include <fnmatch.h>
 
+@implementation TZPolicyFile
++ (NSDictionary *)readFromDirectory:(NSString *)directory migrateLegacy:(BOOL)migrate error:(NSError **)error {
+    NSString *path = [directory stringByAppendingPathComponent:@"policy.plist"];
+    BOOL legacy = ![NSFileManager.defaultManager fileExistsAtPath:path];
+    if (legacy) path = [directory stringByAppendingPathComponent:@"policy.json"];
+    NSData *data = [NSData dataWithContentsOfFile:path options:0 error:error];
+    if (!data) return nil;
+    NSDictionary *value = legacy ? [NSJSONSerialization JSONObjectWithData:data options:0 error:error]
+        : [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:nil error:error];
+    if (!value || ![TZProgramPolicy policyWithDictionary:value error:error]) return nil;
+    if (legacy && migrate && ![self write:value toDirectory:directory error:error]) return nil;
+    return value;
+}
++ (BOOL)write:(NSDictionary *)value toDirectory:(NSString *)directory error:(NSError **)error {
+    if (![TZProgramPolicy policyWithDictionary:value error:error]) return NO;
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListXMLFormat_v1_0 options:0 error:error];
+    return data && [data writeToFile:[directory stringByAppendingPathComponent:@"policy.plist"] options:NSDataWritingAtomic error:error];
+}
+@end
+
 @implementation TZRule
 - (NSDictionary *)dictionary {
     return @{@"id": self.identifier, @"name": self.name ?: self.pattern, @"kind": self.kind,

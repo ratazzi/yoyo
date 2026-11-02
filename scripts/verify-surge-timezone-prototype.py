@@ -1,5 +1,6 @@
 """Live PID/session/socket checks against the local Yoyo Surge prototype."""
 import json
+import plistlib
 import os
 from pathlib import Path
 import shutil
@@ -10,22 +11,22 @@ import uuid
 
 root = Path(__file__).resolve().parent.parent
 os.chdir(root)
-policy_path = root / "build/state/policy.json"
+policy_path = root / "build/state/policy.plist"
 state_path = root / "build/state/daemon-state.json"
 identifier = "test-surge-zone-" + uuid.uuid4().hex
 
 
 def write_policy(value):
     mode = policy_path.stat().st_mode & 0o777
-    with tempfile.NamedTemporaryFile(mode="w", dir=policy_path.parent, delete=False) as output:
-        json.dump(value, output)
+    with tempfile.NamedTemporaryFile(mode="wb", dir=policy_path.parent, delete=False) as output:
+        plistlib.dump(value, output)
         temporary = Path(output.name)
     temporary.chmod(mode)
     temporary.replace(policy_path)
 
 
 def remove_rule():
-    current = json.loads(policy_path.read_text())
+    current = plistlib.loads(policy_path.read_bytes())
     current["rules"] = [rule for rule in current["rules"] if rule["id"] != identifier]
     write_policy(current)
 
@@ -40,7 +41,7 @@ def wait_target(path, present):
     raise RuntimeError("Daemon did not reload the temporary fixture rule")
 
 
-initial = json.loads(policy_path.read_text())
+initial = plistlib.loads(policy_path.read_bytes())
 if not initial.get("es_enabled"):
     raise SystemExit("Enable the ES background service first")
 binary = root / "build/surge-socket-test"
@@ -54,7 +55,7 @@ try:
                                  ("la", "America/Los_Angeles", "Los_Angeles")]:
         path = root / ("build/surge-socket-test-" + suffix)
         shutil.copy2(binary, path)
-        current = json.loads(policy_path.read_text())
+        current = plistlib.loads(policy_path.read_bytes())
         current["rules"] = [rule for rule in current["rules"] if rule["id"] != identifier]
         current["rules"].append({"id": identifier, "name": "Surge PID Zone Test", "kind": "cli", "pattern": str(path),
                                  "mode": "fixed", "zone": zone, "enabled": True, "logging": True})

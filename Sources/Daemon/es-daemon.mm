@@ -29,7 +29,7 @@ static es_client_t *client;
 static dispatch_queue_t engineQueue;
 static NSDictionary *configuration;
 static TZProgramPolicy *policy;
-static NSData *policyData;
+static NSDictionary *policyData;
 static NSMutableDictionary *state, *records, *pending;
 static NSMutableArray *recent;
 static NSString *directory, *socketPath, *library, *uiPath;
@@ -236,12 +236,13 @@ static void restore(void) {
     }
 }
 static void reload_policy(void) {
-    NSData *data = [NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:@"policy.json"]];
-    if (!data || [data isEqual:policyData]) return;
-    NSError *error; NSDictionary *value = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    NSError *error = nil;
+    NSDictionary *value = [TZPolicyFile readFromDirectory:directory migrateLegacy:NO error:&error];
+    if (!value && error.code == NSFileReadNoSuchFileError && [error.domain isEqual:NSCocoaErrorDomain]) return;
+    if (value && [value isEqual:policyData]) { [state removeObjectForKey:@"policy_error"]; return; }
     TZProgramPolicy *updated = value ? [TZProgramPolicy policyWithDictionary:value error:&error] : nil;
     if (!updated) { state[@"policy_error"] = error.localizedDescription ?: @"Invalid policy"; return; }
-    policy = updated; policyData = data; [state removeObjectForKey:@"policy_error"];
+    policy = updated; policyData = value; [state removeObjectForKey:@"policy_error"];
     promptTimeout = value[@"prompt_timeout_seconds"] ? fmax(1, fmin(30, [value[@"prompt_timeout_seconds"] doubleValue])) : 20;
     for (NSDictionary *record in records.allValues) flag_update(record);
     BOOL enabled = NO;
