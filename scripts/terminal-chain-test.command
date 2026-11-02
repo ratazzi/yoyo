@@ -43,7 +43,7 @@ if ! mkdir "$CHAIN_ROOT/build/terminal-chain-test.lock" 2>/dev/null; then
     printf 'Another chain test is running; no settings changed.\n'; exit 2
 fi
 CHAIN_OUTPUT=$(mktemp -d "$CHAIN_ROOT/build/terminal-chain.XXXXXX") || { rmdir "$CHAIN_ROOT/build/terminal-chain-test.lock"; exit 2; }
-CHAIN_POLICY="$CHAIN_ROOT/build/state/policy.json"
+CHAIN_POLICY="$CHAIN_ROOT/build/state/policy.plist"
 CHAIN_BACKUP="$CHAIN_OUTPUT/date-rule-backup.json"
 printf '%s\n' "$CHAIN_OUTPUT" > "$CHAIN_ROOT/build/terminal-chain-last-run"
 exec > >(/usr/bin/tee "$CHAIN_OUTPUT/output.txt") 2>&1

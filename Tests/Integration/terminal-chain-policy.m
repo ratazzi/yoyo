@@ -1,11 +1,12 @@
 #import <Foundation/Foundation.h>
 
-static id read_json(NSString *path) {
+static id read_document(NSString *path) {
     NSData *data = [NSData dataWithContentsOfFile:path];
-    return data ? [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil] : nil;
+    if (!data) return nil;
+    return [path.pathExtension isEqual:@"plist"] ? [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListMutableContainers format:nil error:nil] : [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
 }
-static BOOL write_json(NSString *path, id value) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:nil];
+static BOOL write_document(NSString *path, id value) {
+    NSData *data = [path.pathExtension isEqual:@"plist"] ? [NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListXMLFormat_v1_0 options:0 error:nil] : [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingPrettyPrinted error:nil];
     return data && [data writeToFile:path options:NSDataWritingAtomic error:nil];
 }
 int main(int argc, char **argv) {
@@ -17,7 +18,7 @@ int main(int argc, char **argv) {
             NSInteger seconds = [zone secondsFromGMTForDate:NSDate.date], absolute = labs(seconds);
             printf("%c%02ld%02ld\n", seconds < 0 ? '-' : '+', (long)(absolute / 3600), (long)(absolute % 3600 / 60)); return 0;
         }
-        id value = read_json(path); if (![value isKindOfClass:NSDictionary.class]) return 2;
+        id value = read_document(path); if (![value isKindOfClass:NSDictionary.class]) return 2;
         if ([command isEqual:@"date-zone"]) {
             for (NSDictionary *rule in value[@"rules"]) if ([rule[@"enabled"] boolValue] && [rule[@"mode"] isEqual:@"fixed"]) {
                 puts([rule[@"zone"] UTF8String]); return 0;
@@ -45,9 +46,9 @@ int main(int argc, char **argv) {
         if ([command isEqual:@"backup"]) {
             NSMutableArray *rules = [NSMutableArray new];
             for (NSDictionary *rule in value[@"rules"]) if ([rule[@"kind"] isEqual:@"cli"] && [rule[@"pattern"] isEqual:@"/bin/date"]) [rules addObject:rule];
-            return write_json(backupPath, @{@"token": NSUUID.UUID.UUIDString, @"rules": rules}) ? 0 : 2;
+            return write_document(backupPath, @{@"token": NSUUID.UUID.UUIDString, @"rules": rules}) ? 0 : 2;
         }
-        NSDictionary *backup = read_json(backupPath); if (!backup[@"token"]) return 2;
+        NSDictionary *backup = read_document(backupPath); if (!backup[@"token"]) return 2;
         BOOL changed = NO;
         if ([command isEqual:@"disable"]) {
             for (NSMutableDictionary *rule in value[@"rules"]) {
@@ -67,6 +68,6 @@ int main(int argc, char **argv) {
                 [rule removeObjectForKey:@"_chain_test_token"];
             }
         } else return 2;
-        return !changed || write_json(path, value) ? 0 : 2;
+        return !changed || write_document(path, value) ? 0 : 2;
     }
 }

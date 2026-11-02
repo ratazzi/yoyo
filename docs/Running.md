@@ -52,7 +52,7 @@ Ask Every Launch choices are never saved as the next launch's answer. Each new r
 
 The development build uses `build/state/`:
 
-- `policy.json`: validated rules, ES enabled flag, and app default.
+- `policy.plist`: XML property list containing validated rules, ES enabled flag, and app default. On first launch, a valid legacy `policy.json` is migrated if no plist exists; the JSON remains as a backup. Once present, the plist takes precedence, including when it is invalid.
 - `daemon-state.json`: health and latest launch outcome.
 - `behavior.jsonl`: optional metadata logs, rotated at 4 MiB with four archives.
 - `recent-apps.json`: UI-owned application launch history, up to 100 regular/menu bar apps by Bundle ID. Uses Workspace lifecycle notifications and actual launch dates; CLI, helpers, background agents and focus changes do not refresh it. Works without ES. The previous experimental `recent-launches.json` is left untouched and no longer used.

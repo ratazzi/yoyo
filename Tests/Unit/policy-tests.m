@@ -7,6 +7,35 @@ static NSDictionary *rule(NSString *identifier, NSString *kind, NSString *patter
 }
 int main(void) {
     @autoreleasepool {
+        NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+        assert([NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]);
+        NSString *legacyPath = [directory stringByAppendingPathComponent:@"policy.json"];
+        NSString *plistPath = [directory stringByAppendingPathComponent:@"policy.plist"];
+        NSDictionary *legacy = @{@"rules": @[rule(@"stored", @"cli", @"/usr/bin/example", @"fixed", @"Asia/Tokyo")], @"es_enabled": @YES};
+        NSData *legacyData = [NSJSONSerialization dataWithJSONObject:legacy options:0 error:nil];
+        assert([legacyData writeToFile:legacyPath atomically:YES]);
+        assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:NO error:nil] isEqual:legacy]);
+        assert(![NSFileManager.defaultManager fileExistsAtPath:plistPath]);
+        assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:YES error:nil] isEqual:legacy]);
+        assert([[NSData dataWithContentsOfFile:legacyPath] isEqual:legacyData]);
+        NSPropertyListFormat format;
+        NSDictionary *migratedValue = [NSPropertyListSerialization propertyListWithData:[NSData dataWithContentsOfFile:plistPath] options:0 format:&format error:nil];
+        assert([migratedValue isEqual:legacy] && format == NSPropertyListXMLFormat_v1_0);
+        NSDictionary *disabled = @{@"rules": @[], @"es_enabled": @NO};
+        assert([TZPolicyFile write:disabled toDirectory:directory error:nil]);
+        assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:YES error:nil] isEqual:disabled]);
+        assert(![TZPolicyFile write:@{@"rules": @"invalid"} toDirectory:directory error:nil]);
+        assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:NO error:nil] isEqual:disabled]);
+        assert([[@"broken plist" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:plistPath atomically:YES]);
+        NSError *readError = nil;
+        assert(![TZPolicyFile readFromDirectory:directory migrateLegacy:YES error:&readError] && readError);
+        assert([NSFileManager.defaultManager removeItemAtPath:plistPath error:nil]);
+        // Invalid legacy data must not create a plist or destroy the backup.
+        assert([[@"not json" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:legacyPath atomically:YES]);
+        assert(![TZPolicyFile readFromDirectory:directory migrateLegacy:YES error:nil]);
+        assert(![NSFileManager.defaultManager fileExistsAtPath:plistPath]);
+        assert([NSFileManager.defaultManager removeItemAtPath:directory error:nil]);
+        puts("Policy storage: XML plist, legacy migration, precedence and invalid-file preservation: PASS");
         NSArray *rules = @[
             rule(@"app", @"app", @"/Applications/Example.app", @"ask", @"Asia/Tokyo"),
             rule(@"child-default", @"cli", @"/Applications/Example.app/Contents/MacOS/Helper", @"default", @""),

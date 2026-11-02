@@ -1,6 +1,11 @@
 #pragma once
 #import <Foundation/Foundation.h>
 
+@interface TZPolicyFile : NSObject
++ (NSDictionary *)readFromDirectory:(NSString *)directory migrateLegacy:(BOOL)migrate error:(NSError **)error;
++ (BOOL)write:(NSDictionary *)value toDirectory:(NSString *)directory error:(NSError **)error;
+@end
+
 @interface TZRule : NSObject
 @property(copy) NSString *identifier;
 @property(copy) NSString *name;

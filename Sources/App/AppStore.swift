@@ -30,9 +30,9 @@ final class AppStore: ObservableObject {
         stateDirectory = URL(fileURLWithPath: (statePath as NSString).expandingTildeInPath)
         try? FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
         do {
-            let data = try Data(contentsOf: stateDirectory.appendingPathComponent("policy.json"))
-            if let value = try JSONSerialization.jsonObject(with: data) as? [String: Any], let normalized = TZNormalizePolicy(value) {
-                policy = try JSONDecoder().decode(PolicyDocument.self, from: JSONSerialization.data(withJSONObject: normalized))
+            let value = try TZPolicyFile.read(fromDirectory: stateDirectory.path, migrateLegacy: true)
+            if let normalized = TZNormalizePolicy(value) {
+                policy = try PropertyListDecoder().decode(PolicyDocument.self, from: PropertyListSerialization.data(fromPropertyList: normalized, format: .xml, options: 0))
             } else { errorMessage = "The saved rules could not be read." }
         } catch where (error as NSError).code == NSFileReadNoSuchFileError {
             // First launch starts with no rules and no background service.
@@ -54,13 +54,12 @@ final class AppStore: ObservableObject {
     @discardableResult
     func save(_ candidate: PolicyDocument) -> Bool {
         do {
-            let encoded = try JSONEncoder().encode(candidate)
-            let value = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+            let encoded = try PropertyListEncoder().encode(candidate)
+            let value = try PropertyListSerialization.propertyList(from: encoded, format: nil) as! [String: Any]
             if let error = TZPolicyError(value) { errorMessage = error; return false }
             guard let normalized = TZNormalizePolicy(value) else { return false }
-            let data = try JSONSerialization.data(withJSONObject: normalized, options: [.prettyPrinted, .sortedKeys])
-            try data.write(to: stateDirectory.appendingPathComponent("policy.json"), options: .atomic)
-            policy = try JSONDecoder().decode(PolicyDocument.self, from: data)
+            try TZPolicyFile.write(normalized, toDirectory: stateDirectory.path)
+            policy = try PropertyListDecoder().decode(PolicyDocument.self, from: PropertyListSerialization.data(fromPropertyList: normalized, format: .xml, options: 0))
             return true
         } catch { errorMessage = error.localizedDescription; return false }
     }
