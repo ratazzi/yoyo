@@ -130,11 +130,6 @@ description = "Verify Surge PID and timezone routing against the development ser
 tools = { python = "3.13.9", uv = "0.13.6" }
 run = "uv run --no-project python scripts/verification/surge-timezone.py"
 
-[tasks."verify:chrome-profiles"]
-description = "Verify socket ownership across Chrome profiles"
-tools = { python = "3.13.9", uv = "0.13.6" }
-run = "uv run --no-project python scripts/verification/chrome-profile-network.py"
-
 [tasks."verify:badge-motion"]
 description = "Verify badge movement against a diagnostic development build"
 tools = { python = "3.13.9", uv = "0.13.6" }

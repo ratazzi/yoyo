@@ -78,14 +78,9 @@ requests reach the script, so this is not an audit of all system network traffic
 
 ## Verification
 
-Chrome profile attribution was tested with two profiles under one temporary
-user-data directory and two separate temporary user-data directories. The shared
-profiles used the same Network Service socket PID; separate data directories
-used distinct Network Service PIDs. Yoyo's socket lookup agreed with independent
-`lsof` ownership for all four connections. Thus profile-directory selection alone
-does not isolate timezone-based network routing. Reproduce with
-`mise run verify:chrome-profiles`;
-evidence is written to `build/evidence/chrome-profiles/result.json`.
+Chrome profile-based routing was explored and abandoned: profiles can share a
+Network Service socket PID, so socket ownership cannot distinguish them reliably.
+Chrome profile isolation is not a supported routing mechanism.
 
 A real Surge HTTP-proxy curl request returned the independently recorded PID
 7481 with `socket_unique` and `proxy_tuple` evidence; the report is at
