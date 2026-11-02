@@ -15,7 +15,7 @@ Open Yoyo. The built-in receiver starts automatically in Debug and Release on
 returns the latest diagnostic report. Closing the main window leaves it running;
 quitting Yoyo stops it. Keep the ES background service enabled for session lookup.
 Stop any old standalone prototype before starting the integrated application.
-`zsh scripts/run-surge-prototype.sh` remains available only as a development tool;
+`mise run dev:surge` remains available only as a development tool;
 it uses the signed Yoyo binary's `--inspect-process` command to query the daemon.
 
 Manually create the `Paris` and `Singapore` policies in Surge, then merge
@@ -84,18 +84,18 @@ profiles used the same Network Service socket PID; separate data directories
 used distinct Network Service PIDs. Yoyo's socket lookup agreed with independent
 `lsof` ownership for all four connections. Thus profile-directory selection alone
 does not isolate timezone-based network routing. Reproduce with
-`mise exec -- uv run --no-project python scripts/verify-chrome-profile-network.py`;
+`mise run verify:chrome-profiles`;
 evidence is written to `build/evidence/chrome-profiles/result.json`.
 
 A real Surge HTTP-proxy curl request returned the independently recorded PID
 7481 with `socket_unique` and `proxy_tuple` evidence; the report is at
 `build/evidence/surge/real-curl.json`.
 
-`scripts/verify-surge-timezone-prototype.py` adds isolated temporary CLI rules,
+`mise run verify:surge` adds isolated temporary CLI rules,
 launches signed native socket fixtures under real daemon sessions, and removes
 its rules afterward. Paris, Singapore and Los Angeles launch-session timezones are checked,
 including TCP/UDP ownership and unmatched missing-port/shared/closed controls.
-Run it with `mise exec -- uv run --no-project python scripts/verify-surge-timezone-prototype.py`.
+Run it with `mise run verify:surge`.
 Unit tests cover stale/mismatched sessions, timezone naming conventions and invalid zones;
 `Tests/Integration/surge-rule-script-tests.js` covers timezone arguments, failures,
 timeouts and recursion. Full Surge policy routing requires the user's profile

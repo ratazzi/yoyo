@@ -1,6 +1,9 @@
 [tools]
 "github:ratazzi/hola" = "0.4.0"
 
+[env]
+DEVELOPER_DIR = "{{ env.DEVELOPER_DIR | default(value='/Applications/Xcode.app/Contents/Developer') }}"
+
 [tasks.build-app]
 description = "Build and sign Yoyo.app"
 run = "hola run build_app"
@@ -9,9 +12,6 @@ run = "hola run build_app"
 description = "Build a release DMG"
 env.BUILD_CONFIGURATION = "Release"
 run = "hola run package_dmg"
-
-[tasks.test]
-run = "zsh scripts/test-unit.sh"
 
 [tasks.release]
 description = "Build, sign, notarize and verify the release DMG"
@@ -25,5 +25,149 @@ NOTARIZE_APPLE_ID = { required = true, redact = true }
 NOTARIZE_PASSWORD = { required = true, redact = true }
 
 [tasks.notarize-dmg]
+description = "Notarize and verify an existing DMG"
 usage = 'arg "<dmg>" env="DMG_PATH"'
 run = "hola run notarize_dmg"
+
+[tasks."dev:surge"]
+description = "Run the standalone Surge bridge"
+shell = "zsh -eu -c"
+usage = 'arg "[port]" default="47643"'
+run = '''
+mkdir -p build
+/usr/bin/clang -fobjc-arc -c Sources/App/SurgeSocketPrototype.m -o build/surge-socket-prototype.o
+/usr/bin/swiftc -D SURGE_BRIDGE_STANDALONE -parse-as-library -import-objc-header Sources/App/SurgeSocketPrototype.h \
+    Sources/App/SurgeBridge.swift Sources/App/SurgeTimezoneRouting.swift Sources/App/SurgeNetworkAudit.swift build/surge-socket-prototype.o -o build/surge-bridge-prototype
+exec build/surge-bridge-prototype "${usage_port:-47643}"
+'''
+
+[tasks."verify:cli"]
+description = "Verify CLI startup paths; requires a running injector"
+shell = "zsh -eu -c"
+usage = 'flag "--control" help="Run explicit injection instead of automatic launch checks"'
+run = '''
+mkdir -p build
+/usr/bin/clang Tests/Fixtures/cli-fixture.c -o build/cli-fixture
+/usr/bin/clang Tests/Fixtures/cli-start-paths.c -o build/cli-start-paths
+if [[ "${usage_control:-false}" == true ]]; then
+    /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -arch arm64 -arch arm64e -dynamiclib -framework Foundation -framework CoreFoundation -licucore Sources/Injection/enforced.m Sources/Injection/timezone-files.c Sources/Injection/runtime-trace.c -o build/libenforced.dylib
+    PROCESS_TIMEZONE=Asia/Tokyo DYLD_INSERT_LIBRARIES="$PWD/build/libenforced.dylib" ./build/cli-fixture
+else
+    # A passing result requires a separately running automatic injector.
+    # This driver supplies no injection environment to clean-environment cases.
+    ./build/cli-start-paths "$PWD/build/cli-fixture"
+fi
+'''
+
+[tasks."verify:rules"]
+description = "Verify program rule matching against the development service"
+shell = "zsh -eu -c"
+run = '''
+mkdir -p build/chain/Example.app/Contents/Helpers
+/usr/bin/clang Tests/Fixtures/chain-fixture.c -o build/chain/parent
+/usr/bin/codesign --force --sign A5D59E9573A394C9AB54B3354913C818170B9948 build/chain/parent
+cp build/chain/parent build/chain/child-one
+cp build/chain/parent build/chain/grand
+cp build/chain/parent build/chain/Example.app/Contents/Helpers/helper
+/usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Integration/verify-rules.m Sources/Shared/program-policy.m -o build/verify-rules
+build/verify-rules
+'''
+
+[tasks."verify:system-cli"]
+description = "Verify an existing Tokyo rule for /bin/date"
+shell = "zsh -eu -c"
+run = '''
+mkdir -p build/evidence
+if actual="$(/usr/bin/env -i /bin/date -r 0 '+%F %T %z' 2> build/evidence/system-date.stderr)"; then
+    print -r -- "$actual" > build/evidence/system-date.txt
+else
+    print -u2 'System CLI could not execute; inspect build/state/exec-events.jsonl'
+    exit 1
+fi
+[[ "$actual" == '1970-01-01 09:00:00 +0900' ]] || {
+    print -u2 "System CLI returned an unexpected timezone: $actual"
+    exit 1
+}
+print -r -- 'Original /bin/date, empty environment, automatic Tokyo rule: PASS'
+'''
+
+[tasks."build:badge-fixture"]
+description = "Build the window badge fixture"
+shell = "zsh -eu -c"
+run = '''
+fixture_app="$PWD/build/WindowBadgeFixture.app"
+mkdir -p "$fixture_app/Contents/MacOS"
+/usr/bin/swiftc -parse-as-library -framework AppKit Tests/Fixtures/badge-window.swift -o "$fixture_app/Contents/MacOS/window-badge-fixture"
+cp Tests/Fixtures/badge-Info.plist "$fixture_app/Contents/Info.plist"
+/usr/bin/codesign --force --sign "${SIGN_IDENTITY:--}" "$fixture_app"
+print -r -- "$fixture_app"
+'''
+
+[tasks."build:late-rule-fixture"]
+description = "Build fixtures for late-rule and restart checks"
+shell = "zsh -eu -c"
+run = '''
+base="$PWD/build/tests/late-rule"
+mkdir -p "$base/LateRule.app/Contents/MacOS" "$base/LateRule.app/Contents/Helpers"
+/usr/bin/clang Tests/Fixtures/late-rule-fixture.c -o "$base/LateRule.app/Contents/MacOS/parent"
+/usr/bin/codesign --force --sign "${SIGN_IDENTITY:-A5D59E9573A394C9AB54B3354913C818170B9948}" "$base/LateRule.app/Contents/MacOS/parent"
+cp "$base/LateRule.app/Contents/MacOS/parent" "$base/LateRule.app/Contents/Helpers/helper"
+cp "$base/LateRule.app/Contents/MacOS/parent" "$base/outside"
+/usr/bin/clang -fobjc-arc -fblocks -framework Foundation -framework AppKit Tests/Integration/verify-late-rule.m -o "$base/verify-late-rule"
+'''
+
+[tasks."verify:late-rule"]
+description = "Verify late rules across UI restarts"
+depends = ["build:late-rule-fixture"]
+run = [
+  "build/tests/late-rule/verify-late-rule",
+  "build/tests/late-rule/verify-late-rule --restart-ui",
+  "build/tests/late-rule/verify-late-rule --rule-before-launch --restart-ui",
+]
+
+[tasks."verify:surge"]
+description = "Verify Surge PID and timezone routing against the development service"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = "uv run --no-project python scripts/verification/surge-timezone.py"
+
+[tasks."verify:chrome-profiles"]
+description = "Verify socket ownership across Chrome profiles"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = "uv run --no-project python scripts/verification/chrome-profile-network.py"
+
+[tasks."verify:badge-motion"]
+description = "Verify badge movement against a diagnostic development build"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = "uv run --no-project python scripts/verification/window-badge-motion.py"
+
+[tasks."verify:badge-occlusion"]
+description = "Check badge placement and occlusion from a diagnostic snapshot"
+usage = '''
+arg "[snapshot]" default="build/state/window-badge-diagnostics.json"
+flag "--require-anchor" help="Also verify the stable edge anchor"
+'''
+shell = "zsh -eu -c"
+run = '''
+args=()
+[[ "${usage_require_anchor:-false}" == true ]] && args+=(--require-anchor)
+/usr/bin/swift scripts/verification/window-badge-occlusion.swift "$usage_snapshot" "${args[@]}"
+'''
+
+[tasks."diagnose:badge-scene"]
+description = "Inspect current window geometry and badge placement"
+shell = "zsh -eu -c"
+run = '''
+mkdir -p build
+/usr/bin/swiftc -parse-as-library Sources/App/WindowBadgeModel.swift scripts/diagnostics/window-badge-scene.swift -framework AppKit -o build/diagnose-window-badge-scene
+build/diagnose-window-badge-scene
+'''
+
+[tasks."diagnose:executions"]
+description = "Summarize a captured execution log"
+usage = 'arg "<input>"; arg "[report]"'
+shell = "zsh -eu -c"
+run = '''
+args=("$usage_input")
+[[ -n "${usage_report:-}" ]] && args+=("$usage_report")
+/usr/bin/swift scripts/diagnostics/analyze-executions.swift "${args[@]}"
+'''

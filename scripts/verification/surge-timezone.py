@@ -9,7 +9,7 @@ import tempfile
 import time
 import uuid
 
-root = Path(__file__).resolve().parent.parent
+root = Path(__file__).resolve().parents[2]
 os.chdir(root)
 policy_path = root / "build/state/policy.plist"
 state_path = root / "build/state/daemon-state.json"

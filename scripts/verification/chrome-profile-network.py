@@ -11,7 +11,7 @@ import threading
 import time
 import urllib.request
 
-root = Path(__file__).resolve().parent.parent
+root = Path(__file__).resolve().parents[2]
 chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 evidence = root / "build/evidence/chrome-profiles"
 evidence.mkdir(parents=True, exist_ok=True)

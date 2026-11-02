@@ -1,8 +1,9 @@
 #!/bin/bash
+#MISE description="Verify inheritance from a configured Terminal session"
 set -uo pipefail
 CHAIN_SCRIPT="${BASH_SOURCE[0]}"
 case "$CHAIN_SCRIPT" in /*) ;; *) CHAIN_SCRIPT="$PWD/$CHAIN_SCRIPT" ;; esac
-CHAIN_ROOT="${CHAIN_SCRIPT%/scripts/*}"
+CHAIN_ROOT="${CHAIN_SCRIPT%/mise-tasks/*}"
 CHAIN_APP="$CHAIN_ROOT/build/Yoyo.app/Contents/MacOS/Yoyo"
 CHAIN_HELPER="$CHAIN_ROOT/build/terminal-chain-policy"
 

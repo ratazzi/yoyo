@@ -1,7 +1,8 @@
 #!/bin/zsh
+#MISE description="Run unit tests and daemon self-tests"
 set -eu
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
-cd "${0:A:h:h}"
+cd "${MISE_PROJECT_ROOT:?Run through mise}"
 mkdir -p build/tests
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/tests/policy-tests
 build/tests/policy-tests

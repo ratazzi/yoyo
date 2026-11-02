@@ -1,11 +1,15 @@
 #!/bin/zsh
+#MISE description="Verify recovery across daemon restarts (requires sudo)"
+#MISE raw=true
 set -eu
-cd "${0:A:h:h}"
+cd "${0:A:h:h:h}"
+[[ "$EUID" == 0 ]] || exec sudo "${0:A}" "$@"
 [[ "$EUID" == 0 && -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]] || {
-    print -u2 'Run: sudo zsh scripts/verify-daemon-restart.sh'
+    print -u2 'Run: mise run verify:daemon-restart'
     exit 2
 }
 test_user="$SUDO_USER"
+mise_bin="$(/usr/bin/sudo -u "$test_user" /bin/zsh -lc 'command -v mise')"
 base="$PWD/build/tests/late-rule"
 /usr/bin/sudo -u "$test_user" mkdir -p build/evidence
 exec > >(/usr/bin/sudo -u "$test_user" /usr/bin/tee build/evidence/daemon-restart.log) 2>&1
@@ -22,9 +26,9 @@ for attempt in {1..100}; do
     sleep 0.1
 done
 [[ "$(/usr/bin/plutil -extract status raw -o - build/state/daemon-state.json)" == stopped ]]
-/usr/bin/sudo -u "$test_user" /usr/bin/env "SIGN_IDENTITY=${SIGN_IDENTITY:-A5D59E9573A394C9AB54B3354913C818170B9948}" zsh scripts/build.sh
+/usr/bin/sudo -u "$test_user" /usr/bin/env "SIGN_IDENTITY=${SIGN_IDENTITY:-A5D59E9573A394C9AB54B3354913C818170B9948}" "$mise_bin" run build-app
 /bin/launchctl kickstart system/yoyo.hola.ac.daemon
-/usr/bin/sudo -u "$test_user" zsh scripts/verify-late-rule.sh --build-only
+/usr/bin/sudo -u "$test_user" "$mise_bin" run build:late-rule-fixture
 
 run_case() {
     coproc /usr/bin/sudo -u "$test_user" "$base/verify-late-rule" "$@" --restart-daemon
