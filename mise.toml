@@ -130,6 +130,14 @@ description = "Verify Surge PID and timezone routing against the development ser
 tools = { python = "3.13.9", uv = "0.13.6" }
 run = "uv run --no-project python scripts/verification/surge-timezone.py"
 
+[tasks."verify:surge-sockets"]
+description = "Verify socket attribution without a running Yoyo bridge"
+run = """
+mkdir -p build
+/usr/bin/clang -fobjc-arc -DYOYO_LOCAL_SOCKET_TEST -framework Foundation Tests/Integration/surge-socket-prototype.m Sources/App/SurgeSocketPrototype.m -o build/surge-source-tuple-tests
+build/surge-source-tuple-tests
+"""
+
 [tasks."verify:badge-motion"]
 description = "Verify badge movement against a diagnostic development build"
 tools = { python = "3.13.9", uv = "0.13.6" }

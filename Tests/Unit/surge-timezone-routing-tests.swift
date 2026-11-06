@@ -27,6 +27,9 @@ enum SurgeTimezoneRoutingTests {
         session["path"] = "/test/client"; session["mode"] = "default"; assert(decide(session).zone == nil)
         session["mode"] = "fixed"
         socket["status"] = "ambiguous"; assert(decide(session).reason == "socket_not_unique")
+        socket["status"] = "socket_candidate"; assert(decide(session).reason == "socket_endpoint_unverified")
+        socket["status"] = "inspection_limited"; assert(decide(session).reason == "socket_inspection_limited")
+        socket["status"] = "no_match"; assert(decide(session).reason == "socket_unavailable")
         socket["status"] = "socket_unique"
         for zone in ["America/Los_Angeles", "America/Argentina/Buenos_Aires", "Japan", "Etc/UTC"] {
             session["zone"] = zone; assert(decide(session).zone == zone)

@@ -76,11 +76,17 @@ NSDictionary *TZSurgeSocketCandidates(NSDictionary *request) {
                 BOOL proxy = listenPort > 0 && remotePort == listenPort && [@[@"127.0.0.1", @"::1"] containsObject:remote];
                 BOOL direct = remotePort == destPort && [destinations containsObject:remote];
                 BOOL exact = (tcp || udp) && sourceMatches && (proxy || direct);
-                strong |= exact;
+                // VIF requests can omit both DNS results and a proxy listener. In that
+                // case a unique source tuple still identifies the owner; never use
+                // this fallback to override destination metadata that was supplied.
+                BOOL sourceTuple = (tcp || udp) && sourceMatches && listenPort == 0 &&
+                    destinations.count == 0 && destPort > 0 && remotePort == destPort;
+                strong |= exact || sourceTuple;
                 [sockets addObject:@{@"fd": @(entries[fdIndex].proc_fd), @"localIP": local, @"localPort": @(sourcePort),
                     @"remoteIP": remote, @"remotePort": @(remotePort), @"protocol": isTCP ? @"TCP" : @"UDP",
                     @"generation": @(info->insi_gencnt),
-                    @"evidence": exact ? (proxy ? @"proxy_tuple" : @"destination_tuple") : @"path_source_port"}];
+                    @"evidence": exact ? (proxy ? @"proxy_tuple" : @"destination_tuple") :
+                        (sourceTuple ? @"source_tuple" : @"path_source_port")}];
             }
         }
         if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &after, sizeof(after)) != sizeof(after) ||
@@ -93,8 +99,8 @@ NSDictionary *TZSurgeSocketCandidates(NSDictionary *request) {
         }
     }
     // Missing inspection permission or multiple owners must never become a guessed PID.
-    BOOL unique = verified.count == 1 && denied == 0;
-    NSString *status = unique ? @"socket_unique" : (verified.count > 1 ? @"ambiguous" :
+    BOOL unique = verified.count == 1 && candidates.count == 1 && denied == 0;
+    NSString *status = unique ? @"socket_unique" : (candidates.count > 1 ? @"ambiguous" :
         (denied ? @"inspection_limited" : (candidates.count ? (sourcePort ? @"socket_candidate" : @"path_only") : @"no_match")));
     return @{@"status": status, @"pid": unique ? verified[0][@"pid"] : NSNull.null,
         @"candidate_pid": candidates.count == 1 ? candidates[0][@"pid"] : NSNull.null,
@@ -117,7 +123,7 @@ BOOL TZSurgeSessionIsCurrent(NSDictionary *candidate, NSDictionary *session) {
     if (fabs(started - [candidate[@"started_at"] doubleValue]) > 0.001 || fabs(started - [session[@"started_at"] doubleValue]) > 0.001) return NO;
     BOOL live = NO;
     for (NSDictionary *socket in candidate[@"sockets"]) {
-        if (![@[@"proxy_tuple", @"destination_tuple"] containsObject:socket[@"evidence"]]) continue;
+        if (![@[@"proxy_tuple", @"destination_tuple", @"source_tuple"] containsObject:socket[@"evidence"]]) continue;
         struct socket_fdinfo current;
         if (proc_pidfdinfo(pid, [socket[@"fd"] intValue], PROC_PIDFDSOCKETINFO, &current, sizeof(current)) != sizeof(current)) continue;
         BOOL tcp = current.psi.soi_kind == SOCKINFO_TCP;

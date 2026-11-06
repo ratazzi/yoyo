@@ -22,7 +22,14 @@ enum SurgeTimezoneRouting {
         guard socket["status"] as? String == "socket_unique", let pid = socket["pid"] as? Int,
               let candidates = socket["candidates"] as? [[String: Any]],
               let candidate = candidates.first(where: { $0["pid"] as? Int == pid }) else {
-            return SurgeRouteDecision(reason: "socket_not_unique")
+            let reason: String
+            switch socket["status"] as? String {
+            case "ambiguous": reason = "socket_not_unique"
+            case "socket_candidate": reason = "socket_endpoint_unverified"
+            case "inspection_limited": reason = "socket_inspection_limited"
+            default: reason = "socket_unavailable"
+            }
+            return SurgeRouteDecision(reason: reason)
         }
         guard let session else { return SurgeRouteDecision(reason: "no_launch_session") }
         guard session["_lookup_error"] == nil else { return SurgeRouteDecision(reason: "session_lookup_failed") }
