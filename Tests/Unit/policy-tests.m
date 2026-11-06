@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "program-policy.h"
+#import "timezone-policy.h"
 #include <assert.h>
 
 static NSDictionary *rule(NSString *identifier, NSString *kind, NSString *pattern, NSString *mode, NSString *zone) {
@@ -9,6 +10,22 @@ int main(void) {
     @autoreleasepool {
         NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
         assert([NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]);
+        NSString *zoneRoot = [directory stringByAppendingPathComponent:@"zoneinfo.default"];
+        NSString *asia = [zoneRoot stringByAppendingPathComponent:@"Asia"];
+        assert([NSFileManager.defaultManager createDirectoryAtPath:asia withIntermediateDirectories:YES attributes:nil error:nil]);
+        assert([NSFileManager.defaultManager copyItemAtPath:@"/var/db/timezone/zoneinfo/Asia/Tokyo"
+            toPath:[asia stringByAppendingPathComponent:@"Tokyo"] error:nil]);
+        assert([NSFileManager.defaultManager createSymbolicLinkAtPath:[zoneRoot stringByAppendingPathComponent:@"Japan"]
+            withDestinationPath:@"Asia/Tokyo" error:nil]);
+        NSString *zoneLink = [directory stringByAppendingPathComponent:@"zoneinfo"];
+        assert([NSFileManager.defaultManager createSymbolicLinkAtPath:zoneLink withDestinationPath:zoneRoot error:nil]);
+        assert([canonical_timezone_name_in_directory(@"Asia/Tokyo", zoneLink) isEqual:@"Asia/Tokyo"]);
+        assert([canonical_timezone_name_in_directory(@"Japan", zoneLink) isEqual:@"Asia/Tokyo"]);
+        assert(!canonical_timezone_name_in_directory(@"Europe/Paris", zoneLink));
+        assert([NSFileManager.defaultManager createSymbolicLinkAtPath:[zoneRoot stringByAppendingPathComponent:@"UTC"]
+            withDestinationPath:@"/var/db/timezone/zoneinfo/UTC" error:nil]);
+        assert(!canonical_timezone_name_in_directory(@"UTC", zoneLink));
+        puts("Timezone root: zoneinfo.default, symlink aliases, missing files and escaped roots: PASS");
         NSString *legacyPath = [directory stringByAppendingPathComponent:@"policy.json"];
         NSString *plistPath = [directory stringByAppendingPathComponent:@"policy.plist"];
         NSDictionary *legacy = @{@"rules": @[rule(@"stored", @"cli", @"/usr/bin/example", @"fixed", @"Asia/Tokyo")], @"es_enabled": @YES};
