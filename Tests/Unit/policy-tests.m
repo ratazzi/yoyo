@@ -14,7 +14,14 @@ int main(void) {
         NSDictionary *legacy = @{@"rules": @[rule(@"stored", @"cli", @"/usr/bin/example", @"fixed", @"Asia/Tokyo")], @"es_enabled": @YES};
         NSData *legacyData = [NSJSONSerialization dataWithJSONObject:legacy options:0 error:nil];
         assert([legacyData writeToFile:legacyPath atomically:YES]);
-        assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:NO error:nil] isEqual:legacy]);
+        NSError *legacyError = nil;
+        NSDictionary *loadedLegacy = [TZPolicyFile readFromDirectory:directory migrateLegacy:NO error:&legacyError];
+        if (![loadedLegacy isEqual:legacy]) {
+            NSLog(@"Legacy policy read failed: %@; value=%@; timezone=%@; zoneinfo=%@", legacyError, loadedLegacy,
+                [NSTimeZone timeZoneWithName:@"Asia/Tokyo"],
+                [@"/var/db/timezone/zoneinfo/Asia/Tokyo" stringByResolvingSymlinksInPath]);
+        }
+        assert([loadedLegacy isEqual:legacy]);
         assert(![NSFileManager.defaultManager fileExistsAtPath:plistPath]);
         assert([[TZPolicyFile readFromDirectory:directory migrateLegacy:YES error:nil] isEqual:legacy]);
         assert([[NSData dataWithContentsOfFile:legacyPath] isEqual:legacyData]);
