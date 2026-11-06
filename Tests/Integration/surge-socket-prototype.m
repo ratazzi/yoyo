@@ -5,6 +5,10 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef YOYO_LOCAL_SOCKET_TEST
+#import "../../Sources/App/SurgeSocketPrototype.h"
+#include <mach/mach.h>
+#endif
 
 static void require(BOOL value, NSString *message) {
     if (!value) @throw [NSException exceptionWithName:@"TestFailure" reason:message userInfo:nil];
@@ -18,6 +22,9 @@ static int connect_to(int port, int type) {
     return fd;
 }
 static NSDictionary *post(NSDictionary *payload) {
+#ifdef YOYO_LOCAL_SOCKET_TEST
+    return TZSurgeSocketCandidates(payload);
+#else
     int fd = connect_to(47643, SOCK_STREAM);
     NSMutableDictionary *reported = [payload mutableCopy];
     if (getenv("YOYO_EXPECT_ROUTE") && !reported[@"argument"]) reported[@"argument"] = @(getenv("YOYO_EXPECT_ROUTE"));
@@ -44,6 +51,7 @@ static NSDictionary *post(NSDictionary *payload) {
         }
     }
     return value[@"result"];
+#endif
 }
 static int local_port(int fd) {
     struct sockaddr_in address; socklen_t size = sizeof(address);
@@ -66,6 +74,34 @@ int main(void) {
             NSDictionary *result = post(payload);
             require([result[@"status"] isEqual:@"socket_unique"] && [result[@"pid"] intValue] == getpid(), [result description]);
             puts("TCP proxy tuple -> exact PID: PASS");
+            NSMutableDictionary *vif = [payload mutableCopy];
+            [vif removeObjectForKey:@"listenPort"];
+            vif[@"destPort"] = @(port);
+            result = post(vif);
+            require([result[@"status"] isEqual:@"socket_unique"] && [result[@"pid"] intValue] == getpid(), [result description]);
+            require([result[@"candidates"][0][@"sockets"][0][@"evidence"] isEqual:@"source_tuple"], [result description]);
+            puts("Missing destination metadata, unique source tuple -> exact PID: PASS");
+#ifdef YOYO_LOCAL_SOCKET_TEST
+            NSDictionary *sourceCandidate = result[@"candidates"][0];
+            audit_token_t token; mach_msg_type_number_t tokenCount = TASK_AUDIT_TOKEN_COUNT;
+            require(task_info(mach_task_self(), TASK_AUDIT_TOKEN, (task_info_t)&token, &tokenCount) == KERN_SUCCESS, @"audit token failed");
+            NSMutableDictionary *session = [sourceCandidate mutableCopy]; session[@"pidversion"] = @(token.val[7]);
+            require(TZSurgeSessionIsCurrent(sourceCandidate, session), @"Source tuple must pass live identity revalidation");
+            NSMutableDictionary *stale = [sourceCandidate mutableCopy];
+            NSMutableDictionary *staleSocket = [sourceCandidate[@"sockets"][0] mutableCopy];
+            staleSocket[@"generation"] = @0; stale[@"sockets"] = @[staleSocket];
+            require(!TZSurgeSessionIsCurrent(stale, session), @"Stale socket must fail identity revalidation");
+#endif
+            for (NSString *field in @[@"sourceIP", @"protocol", @"destPort", @"hostname", @"dnsResult"]) {
+                NSMutableDictionary *invalid = [vif mutableCopy];
+                if ([field isEqual:@"sourceIP"] || [field isEqual:@"protocol"]) [invalid removeObjectForKey:field];
+                else if ([field isEqual:@"destPort"]) invalid[field] = @0;
+                else if ([field isEqual:@"hostname"]) invalid[field] = @"192.0.2.1";
+                else invalid[field] = @{@"v4Addresses": @[@"192.0.2.1"]};
+                result = post(invalid);
+                require(result[@"pid"] == NSNull.null, [result description]);
+            }
+            puts("Missing source metadata or conflicting destination -> no guessed PID: PASS");
             if (getenv("YOYO_EXPECT_ROUTE")) {
                 NSMutableDictionary *wrong = [payload mutableCopy]; wrong[@"argument"] = @"Wrong_Zone";
                 post(wrong);
@@ -82,6 +118,9 @@ int main(void) {
             result = post(payload);
             require([result[@"status"] isEqual:@"ambiguous"] && result[@"pid"] == NSNull.null && [result[@"candidates"] count] == 2, [result description]);
             puts("Two processes sharing a socket -> ambiguous, no guessed PID: PASS");
+            result = post(vif);
+            require([result[@"status"] isEqual:@"ambiguous"] && result[@"pid"] == NSNull.null, [result description]);
+            puts("Shared source tuple -> ambiguous: PASS");
             kill(child, SIGTERM); waitpid(child, NULL, 0); child = -1;
 
             int udp = connect_to(port, SOCK_DGRAM);
@@ -91,6 +130,12 @@ int main(void) {
             puts("UDP socket -> exact PID: PASS"); close(udp);
 
             close(client);
+#ifdef YOYO_LOCAL_SOCKET_TEST
+            require(!TZSurgeSessionIsCurrent(sourceCandidate, session), @"Closed socket must fail identity revalidation");
+            puts("Source tuple live/stale/closed identity revalidation: PASS");
+#endif
+            result = post(vif);
+            require([result[@"status"] isEqual:@"no_match"], [result description]);
             result = post(payload);
             require([result[@"status"] isEqual:@"no_match"] && result[@"pid"] == NSNull.null, [result description]);
             puts("Closed socket -> no_match: PASS"); close(listener);

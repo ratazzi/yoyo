@@ -43,6 +43,9 @@ The receiver enumerates readable processes with the exact executable path and
 inspects TCP/UDP socket descriptors with libproc. It verifies source port,
 protocol and source IP, plus either the loopback proxy listener endpoint or a
 destination IP/port supplied by Surge. It does not resolve domains itself.
+When VIF supplies neither a proxy listener nor destination IPs, an exact source
+IP/port, protocol and destination port match can also identify a unique owner.
+Supplied destination IPs must still match; the fallback never overrides them.
 Only one verified owner with no same-path inspection failures yields a PID.
 
 Before routing, it checks process birth time, executable path, daemon PID/exec
