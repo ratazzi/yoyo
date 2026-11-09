@@ -47,7 +47,7 @@ Release builds store state in `~/Library/Application Support/Yoyo`; the UI creat
 
 ## Automatic updates
 
-**Software Updates…** selects Stable or Nightly and controls automatic checks. **Check for Updates…** starts a manual check. Fresh nightly installations default to Nightly; explicit user selection persists across upgrades. Stable uses `https://github.com/ratazzi/yoyo/releases/latest/download/appcast.xml`; Nightly uses `https://github.com/ratazzi/yoyo/releases/download/nightly/appcast.xml`. Both use Sparkle's install confirmation UI; automatic background installation is disabled.
+**Settings → Updates** selects Stable or Nightly and controls automatic checks; changes apply when saved. The menu has a single **Check for Updates…** action for manual checks. Fresh nightly installations default to Nightly; explicit user selection persists across upgrades. Stable uses `https://github.com/ratazzi/yoyo/releases/latest/download/appcast.xml`; Nightly uses `https://github.com/ratazzi/yoyo/releases/download/nightly/appcast.xml`. Both use Sparkle's install confirmation UI; automatic background installation is disabled.
 
 All releases use the same Release workflow's `GITHUB_RUN_NUMBER.GITHUB_RUN_ATTEMPT` as `CFBundleVersion` (including the helper) and appcast version. Stable display versions come from tags; nightly display versions include the build number. Retries receive distinct versions and archive names. Switching to Stable waits for a stable release with a higher build number; it never downgrades. Preserve this workflow's run sequence when migrating workflows, or explicitly choose a higher build-number scheme.
 

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var store: AppStore
+    let updater: AppUpdater
     @State private var search = ""
     @State private var editingRule: ProgramRule?
     @State private var isDropTargeted = false
@@ -97,7 +98,7 @@ struct DashboardView: View {
             importPrograms(urls)
         } isTargeted: { isDropTargeted = $0 }
         .sheet(item: $editingRule, onDismiss: advanceImport) { rule in RuleEditor(store: store, initial: rule) }
-        .sheet(isPresented: $store.showingSettings) { SettingsView(store: store) }
+        .sheet(isPresented: $store.showingSettings) { SettingsView(store: store, updater: updater) }
         .alert("Yoyo", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK") { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }

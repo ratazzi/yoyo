@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var windowBadge: WindowBadgeController?
     private var surgeBridge: SurgeBridge?
     private var updater: AppUpdater!
-    private var updatesWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
@@ -33,13 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.title = "TZ"
         let menu = NSMenu()
         for (title, action, key) in [("Open Yoyo", #selector(showMain), ""), ("Settings…", #selector(showSettings), ","),
-                                    ("Find Program…", #selector(focusSearch), "f"),
-                                    ("Software Updates…", #selector(showUpdates), "")] {
+                                    ("Find Program…", #selector(focusSearch), "f")] {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: key); entry.target = self; menu.addItem(entry)
         }
-        menu.addItem(.separator())
         let checkUpdate = NSMenuItem(title: "Check for Updates…", action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
         checkUpdate.target = updater; menu.addItem(checkUpdate)
+        menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Yoyo", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
         statusMenu = StatusMenuController(store: store, applicationMenu: menu) { [weak self] rule in
             self?.showMain()
@@ -63,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Yoyo"; window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 440, height: 360)
-        window.contentView = NSHostingView(rootView: DashboardView(store: store))
+        window.contentView = NSHostingView(rootView: DashboardView(store: store, updater: updater))
         window.setFrameAutosaveName("YoyoCompactMainWindow"); window.center()
         windowBadge = WindowBadgeController(store: store)
         observation = store.$prompts.sink { [weak self] prompts in
@@ -75,16 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) { surgeBridge?.stop() }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         updater.applicationShouldTerminate()
-    }
-    @objc func showUpdates() {
-        if updatesWindow == nil {
-            let panel = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            panel.title = "Yoyo Updates"; panel.isReleasedWhenClosed = false
-            panel.contentView = NSHostingView(rootView: UpdatesView(updater: updater))
-            panel.setContentSize(panel.contentView!.fittingSize); panel.center()
-            updatesWindow = panel
-        }
-        NSApp.activate(ignoringOtherApps: true); updatesWindow?.makeKeyAndOrderFront(nil)
     }
     @objc func showMain() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
     @objc func showTimeZones() {

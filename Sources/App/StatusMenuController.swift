@@ -103,7 +103,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         for entry in applicationMenu.items {
             let copy = entry.copy() as! NSMenuItem
-            let icons = ["Open Yoyo": "macwindow", "Settings…": "gearshape", "Find Program…": "magnifyingglass", "Quit Yoyo": "power"]
+            let icons = ["Open Yoyo": "macwindow", "Settings…": "gearshape", "Find Program…": "magnifyingglass", "Check for Updates…": "arrow.triangle.2.circlepath", "Quit Yoyo": "power"]
             if let name = icons[entry.title] { copy.image = symbol(name, description: entry.title) }
             menu.addItem(copy)
         }
