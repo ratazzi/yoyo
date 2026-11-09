@@ -1,4 +1,4 @@
-APP = "build/Yoyo.app"
+APP = ENV.fetch("OUTPUT_APP", "build/Yoyo.app")
 ENV["DEVELOPER_DIR"] ||= "/Applications/Xcode.app/Contents/Developer"
 
 def q(value)
@@ -30,6 +30,7 @@ task :release do
   ENV["BUILD_CONFIGURATION"] = "Release"
   ENV["STATE_DIRECTORY"] = "~/Library/Application Support/Yoyo"
   ENV["OUTPUT_DMG"] ||= "build/Yoyo-#{ENV.fetch("GITHUB_REF_NAME", "release")}.dmg"
+  raise "SPARKLE_PUBLIC_KEY is required for releases" if ENV.fetch("SPARKLE_PUBLIC_KEY", "").empty?
   profile = "#{ENV.fetch("RUNNER_TEMP", "/tmp")}/Yoyo.provisionprofile"
   begin
     sh "umask 077 && printenv ES_PROVISIONING_PROFILE_BASE64 | base64 -D -o #{q profile}"
@@ -49,10 +50,13 @@ def build_app
   raise "ES provisioning profile not found" if sign_identity != "-" && !File.file?(profile)
   contents = "#{APP}/Contents"
   helper = "#{contents}/Library/LaunchServices/YoyoDaemon.app"
+  sh "zsh scripts/release/fetch-sparkle.sh"
   rm_rf(APP)
   ["#{contents}/Resources/bin", "#{contents}/MacOS", "#{helper}/Contents/MacOS", "#{contents}/Library/LaunchDaemons", "build/state"].each { mkdir_p(_1) }
   sh <<~SH
     set -eu
+    mkdir -p "#{contents}/Frameworks"
+    ditto build/dependencies/sparkle/Sparkle.framework "#{contents}/Frameworks/Sparkle.framework"
     /usr/bin/swiftc -parse-as-library Sources/App/TimezoneArtwork.swift scripts/assets/render-app-icons.swift -framework AppKit -o build/render-app-icons
     build/render-app-icons build/icon-assets
     /usr/bin/iconutil -c icns build/icon-assets/AppIcon.iconset -o "#{contents}/Resources/YoyoFlipClock.icns"
@@ -62,7 +66,7 @@ def build_app
     /usr/bin/clang -fobjc-arc -fblocks -ISources/Shared -c Sources/App/AppBridge.m -o build/app-bridge.o
     /usr/bin/clang -c Sources/Shared/timezone-display.c -o build/timezone-display.o
     /usr/bin/clang -fobjc-arc -c Sources/App/SurgeSocketPrototype.m -o build/surge-socket-prototype.o
-    /usr/bin/swiftc #{swift_flags} -parse-as-library -import-objc-header Sources/App/AppBridge.h -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o build/surge-socket-prototype.o -o "#{contents}/MacOS/Yoyo"
+    /usr/bin/swiftc #{swift_flags} -parse-as-library -import-objc-header Sources/App/AppBridge.h -F build/dependencies/sparkle -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks -framework AppKit -framework SwiftUI -framework ServiceManagement -framework Security -licucore Sources/App/*.swift build/program-policy.o build/control-channel.o build/app-bridge.o build/timezone-display.o build/surge-socket-prototype.o -o "#{contents}/MacOS/Yoyo"
     /usr/bin/clang++ -std=c++20 -fobjc-arc -fblocks -ISources/Shared -framework Foundation -framework Security -lbsm -lEndpointSecurity Sources/Daemon/es-daemon.mm Sources/Daemon/startup-injector.cpp build/program-policy.o build/control-channel.o -o "#{helper}/Contents/MacOS/timezone-es-daemon"
     /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -framework Foundation -framework CoreFoundation Tests/Fixtures/timezone-probe.m -o "#{contents}/Resources/bin/timezone-probe"
     /usr/bin/clang Tests/Fixtures/cli-fixture.c -o "#{contents}/Resources/bin/cli-fixture"
@@ -72,7 +76,17 @@ def build_app
     /usr/bin/clang -fobjc-arc -Wno-deprecated-declarations -ISources/Shared -arch arm64 -arch arm64e -dynamiclib -framework Foundation -framework CoreFoundation -licucore Sources/Injection/enforced.m Sources/Injection/timezone-files.c Sources/Injection/runtime-trace.c -o "#{contents}/Resources/libenforced.dylib"
   SH
   sh "cp Resources/Info.plist #{contents}/Info.plist && cp Resources/Daemon-Info.plist #{helper}/Contents/Info.plist"
-  sh "plutil -replace CFBundleVersion -string #{q ENV.fetch("GITHUB_RUN_NUMBER", "1")} #{contents}/Info.plist"
+  build_version = ENV.fetch("YOYO_BUILD_VERSION", "1")
+  [contents, "#{helper}/Contents"].each do |bundle|
+    sh "plutil -replace CFBundleVersion -string #{q build_version} #{bundle}/Info.plist"
+  end
+  if ENV["YOYO_VERSION"]
+    sh "plutil -replace CFBundleShortVersionString -string #{q ENV.fetch("YOYO_VERSION")} #{contents}/Info.plist"
+  end
+  sh "plutil -replace YoyoUpdateChannel -string #{q ENV.fetch("YOYO_UPDATE_CHANNEL", "stable")} #{contents}/Info.plist"
+  unless ENV.fetch("SPARKLE_PUBLIC_KEY", "").empty?
+    sh "plutil -insert SUPublicEDKey -string #{q ENV.fetch("SPARKLE_PUBLIC_KEY")} #{contents}/Info.plist"
+  end
   service = "#{contents}/Library/LaunchDaemons/yoyo.hola.ac.daemon.plist"
   sh "cp Resources/LaunchDaemon.plist #{service}"
   state = ENV.fetch("STATE_DIRECTORY", "#{Dir.pwd}/build/state")
@@ -86,7 +100,9 @@ def build_app
   sh "plutil -insert StandardOutPath -string #{q logs + '-stdout.txt'} #{service}"
   sh "plutil -insert StandardErrorPath -string #{q logs + '-stderr.txt'} #{service}"
   sh "cp #{q profile} #{helper}/Contents/embedded.provisionprofile" if sign_identity != "-"
-  (Dir.glob("#{contents}/Resources/bin/*") + ["#{contents}/Resources/libenforced.dylib", helper, APP]).each do |path|
+  sparkle = "#{contents}/Frameworks/Sparkle.framework"
+  sparkle_code = Dir.glob("#{sparkle}/Versions/B/XPCServices/*.xpc") + ["#{sparkle}/Versions/B/Autoupdate", "#{sparkle}/Versions/B/Updater.app", sparkle]
+  (sparkle_code + Dir.glob("#{contents}/Resources/bin/*") + ["#{contents}/Resources/libenforced.dylib", helper, APP]).each do |path|
     resources.macos_codesign path do
       identity sign_identity
       hardened_runtime sign_identity != "-"

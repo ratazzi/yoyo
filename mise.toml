@@ -8,6 +8,27 @@ DEVELOPER_DIR = "{{ env.DEVELOPER_DIR | default(value='/Applications/Xcode.app/C
 description = "Build and sign Yoyo.app"
 run = "hola run build_app"
 
+[tasks."release:metadata"]
+description = "Prepare stable/nightly release metadata in CI"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = 'uv run --no-project --python "$(mise which python)" python scripts/release/appcast.py metadata'
+
+[tasks."release:appcast"]
+description = "Sign the notarized update and generate its appcast"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = 'uv run --no-project --python "$(mise which python)" python scripts/release/appcast.py sign'
+
+[tasks."release:publish"]
+description = "Publish signed release assets on GitHub"
+tools = { python = "3.13.9", uv = "0.13.6" }
+run = 'uv run --no-project --python "$(mise which python)" python scripts/release/publish.py'
+
+[tasks."test:updates"]
+description = "Test stable/nightly release metadata and feeds"
+tools = { python = "3.13.9", uv = "0.13.6" }
+env.PYTHONDONTWRITEBYTECODE = "1"
+run = 'uv run --no-project --python "$(mise which python)" python Tests/Unit/update-release-tests.py'
+
 [tasks.package-dmg]
 description = "Build a release DMG"
 env.BUILD_CONFIGURATION = "Release"

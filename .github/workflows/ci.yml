@@ -32,3 +32,14 @@ jobs:
 
       - name: Run project checks
         run: mise run test
+
+      - name: Fetch Sparkle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zsh scripts/release/fetch-sparkle.sh
+
+      - name: Test update feeds and signatures
+        run: mise run test:updates
+
+      - name: Typecheck application with Sparkle
+        run: mise exec -- /usr/bin/swiftc -typecheck -module-cache-path build/tests/ModuleCache -F build/dependencies/sparkle -import-objc-header Sources/App/AppBridge.h Sources/App/*.swift
