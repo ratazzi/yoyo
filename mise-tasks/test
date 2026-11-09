@@ -6,6 +6,8 @@ cd "${MISE_PROJECT_ROOT:?Run through mise}"
 mkdir -p build/tests
 /usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library Sources/App/UpdateChannel.swift Tests/Unit/update-channel-tests.swift -o build/tests/update-channel-tests
 build/tests/update-channel-tests
+/usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library Sources/App/UpdateServiceRecovery.swift Tests/Unit/update-service-recovery-tests.swift -o build/tests/update-service-recovery-tests
+build/tests/update-service-recovery-tests
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/tests/policy-tests
 build/tests/policy-tests
 /usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library Sources/App/RecentApps.swift Tests/Unit/recent-apps-tests.swift -o build/tests/recent-apps-tests

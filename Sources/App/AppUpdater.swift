@@ -9,6 +9,7 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, NSMenuIt
     private static let restoreServiceKey = "RestoreServiceAfterUpdate"
     private var controller: SPUStandardUpdaterController!
     private var installing = false
+    private var serviceRecoveryTask: Task<Void, Never>?
     @Published private(set) var canCheckForUpdates = false
     @Published var channel: UpdateChannel {
         didSet {
@@ -63,10 +64,20 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, NSMenuIt
     }
 
     private func restoreServiceIfNeeded() {
-        guard defaults.bool(forKey: Self.restoreServiceKey) else { return }
-        do {
-            if store.policy.es_enabled { try store.service.register() }
-            defaults.removeObject(forKey: Self.restoreServiceKey)
-        } catch { store.errorMessage = "Could not restore the background service after updating: \(error.localizedDescription)" }
+        guard defaults.bool(forKey: Self.restoreServiceKey), serviceRecoveryTask == nil else { return }
+        serviceRecoveryTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.serviceRecoveryTask = nil }
+            do {
+                try await UpdateServiceRecovery.restore(shouldRestore: {
+                    self.defaults.bool(forKey: Self.restoreServiceKey) && self.store.policy.es_enabled
+                }, register: { try self.store.service.register() })
+                self.defaults.removeObject(forKey: Self.restoreServiceKey)
+            } catch is CancellationError {
+                // Keep the recovery marker for the next launch.
+            } catch {
+                self.store.errorMessage = "Could not restore the background service after updating: \(error.localizedDescription)"
+            }
+        }
     }
 }
