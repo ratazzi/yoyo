@@ -34,26 +34,57 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             view.item = entry; view.toolTip = entry.toolTip; entry.view = view
             return entry
         }
-        menu.addItem(.sectionHeader(title: "Default Time Zone"))
+        let running = NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.compactMap { $0.bundleURL?.resolvingSymlinksInPath().path }
+        let usage = MenuTimeZone.configured(policy: store.policy, system: system, clock: clock)
+        menu.addItem(.sectionHeader(title: "Time Zones"))
+        for (index, group) in usage.enumerated() {
+            let name = index == 0 ? "System Default" : city(group.zone.identifier)
+            let entry = zoneItem(group.zone, name: name + " ›", value: group.zone.identifier,
+                icon: symbol(index == 0 ? "desktopcomputer" : "clock", description: name))
+            entry.action = nil
+            entry.state = group.isDefault ? .on : .off
+            let submenu = NSMenu()
+            submenu.delegate = rowSelection
+            if group.isDefault {
+                let note = NSMenuItem(title: "Default for programs without a rule", action: nil, keyEquivalent: "")
+                note.isEnabled = false; submenu.addItem(note)
+            }
+            submenu.addItem(.sectionHeader(title: "Configured Programs (\(group.rules.count))"))
+            for rule in group.rules.sorted(by: { $0.title.localizedStandardCompare($1.title) == .orderedAscending }) {
+                let path = URL(fileURLWithPath: rule.pattern).resolvingSymlinksInPath().path
+                submenu.addItem(ruleItem(MenuProgramOverride(rule: rule, running: rule.kind == "app" && running.contains(path))))
+            }
+            if group.rules.isEmpty {
+                let empty = NSMenuItem(title: "No explicit program rules", action: nil, keyEquivalent: "")
+                empty.isEnabled = false; submenu.addItem(empty)
+            }
+            entry.submenu = submenu
+            menu.addItem(entry)
+        }
+        let defaultItem = NSMenuItem(title: "Default Time Zone…", action: nil, keyEquivalent: "")
+        let defaultMenu = NSMenu()
+        defaultMenu.delegate = rowSelection
         let systemItem = zoneItem(system, name: "System Default", value: "system", icon: symbol("desktopcomputer", description: "System Time Zone"))
         systemItem.state = store.policy.default_mode != "fixed" ? .on : .off
-        menu.addItem(systemItem)
+        defaultMenu.addItem(systemItem)
         var favorites = store.displayPreferences.favoriteTimeZones.filter { TimeZone(identifier: $0) != nil }
+        for group in usage.dropFirst() where !favorites.contains(group.zone.identifier) { favorites.append(group.zone.identifier) }
         if store.policy.default_mode == "fixed", !favorites.contains(current.identifier) { favorites.insert(current.identifier, at: 0) }
         for identifier in favorites {
             guard let zone = TimeZone(identifier: identifier) else { continue }
             let entry = zoneItem(zone, name: city(identifier), value: identifier, icon: symbol("clock", description: identifier))
             entry.state = store.policy.default_mode == "fixed" && current.identifier == identifier ? .on : .off
-            menu.addItem(entry)
+            defaultMenu.addItem(entry)
         }
         if store.policy.default_mode == "fixed" && !store.displayPreferences.favoriteTimeZones.contains(current.identifier) {
             let favorite = action("Favorite Current Time Zone", #selector(addFavorite), value: current.identifier)
             favorite.image = symbol("star", description: "Add Favorite")
-            menu.addItem(favorite)
+            defaultMenu.addItem(favorite)
         }
+        defaultItem.submenu = defaultMenu
+        menu.addItem(defaultItem)
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Program Overrides"))
-        let running = NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.compactMap { $0.bundleURL?.resolvingSymlinksInPath().path }
         let overrides = MenuProgramOverrides.rows(policy: store.policy, runningAppPaths: running, system: system, clock: clock)
         if overrides.isEmpty {
             let empty = NSMenuItem(title: "No different time zones", action: nil, keyEquivalent: "")
@@ -87,6 +118,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func showImages(in menu: NSMenu) {
         for entry in menu.items {
+            if let submenu = entry.submenu { showImages(in: submenu) }
             // macOS 27 hides menu images by default, even when image is set.
             if entry.image != nil, entry.responds(to: NSSelectorFromString("setPreferredImageVisibility:")) {
                 // NSMenuItemImageVisibilityVisible = 1; keep builds compatible with older SDKs.
