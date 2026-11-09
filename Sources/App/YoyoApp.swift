@@ -31,8 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "TZ"
         let menu = NSMenu()
-        for (title, action, key) in [("Open Yoyo", #selector(showMain), ""), ("Settings…", #selector(showSettings), ","),
-                                    ("Find Program…", #selector(focusSearch), "f")] {
+        for (title, action, key) in [("Open Yoyo", #selector(showMain), ""), ("Find Program…", #selector(focusSearch), "f"),
+                                    ("Settings…", #selector(showSettings), ",")] {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: key); entry.target = self; menu.addItem(entry)
         }
         let checkUpdate = NSMenuItem(title: "Check for Updates…", action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
