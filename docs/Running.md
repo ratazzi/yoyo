@@ -29,6 +29,8 @@ Configure these repository Actions secrets (the same certificate and notary cred
 
 Also configure the repository Actions **variable** `SPARKLE_PUBLIC_KEY` with its matching public key. Release builds require it and embed it as `SUPublicEDKey`; the feed generator verifies the DMG signature against this public key before uploading anything.
 
+For local signing, store `SPARKLE_PUBLIC_KEY` and `SPARKLE_PRIVATE_KEY` in the `[env]` section of `mise.local.toml`. This file is ignored by Git; keep its permissions at `0600`. Mise supplies these values to build and appcast tasks. Keep a protected backup and reuse this pair for future releases. GitHub Actions still requires its corresponding variable and secret; it cannot read the local file.
+
 The build downloads pinned Sparkle 2.10.1 with `gh` and verifies its SHA-256 before extracting it. Follow [Sparkle's key setup](https://sparkle-project.org/documentation/#eddsa-ed25519-signatures) once on a trusted Mac:
 
 ```sh
