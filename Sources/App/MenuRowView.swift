@@ -122,6 +122,10 @@ final class MenuRowView: NSView {
     @discardableResult
     private func activate() -> Bool {
         guard let item, let menu = item.menu else { return false }
+        if let submenu = item.submenu {
+            submenu.popUp(positioning: nil, at: NSPoint(x: bounds.maxX, y: bounds.maxY), in: self)
+            return true
+        }
         let index = menu.index(of: item)
         guard index >= 0 else { return false }
         menu.cancelTracking()

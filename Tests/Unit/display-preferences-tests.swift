@@ -7,6 +7,24 @@ struct DisplayPreferencesTests {
         var policy = PolicyDocument(); var preferences = DisplayPreferences()
         let epoch = Date(timeIntervalSince1970: 0)
         let system = TimeZone(identifier: "America/New_York")!
+        var configured = PolicyDocument()
+        assert(MenuTimeZone.configured(policy: configured, system: system, clock: clock).count == 1)
+        configured.default_mode = "fixed"; configured.default_zone = "Asia/Tokyo"
+        configured.rules = [
+            ProgramRule(name: "Tokyo", mode: "fixed", zone: "Asia/Tokyo"),
+            ProgramRule(name: "Alias", mode: "fixed", zone: "Japan"),
+            ProgramRule(name: "System", mode: "fixed", zone: "US/Eastern"),
+            ProgramRule(name: "Disabled", mode: "fixed", zone: "Europe/Paris", enabled: false),
+            ProgramRule(name: "Ask", mode: "ask", zone: "Europe/Paris"),
+            ProgramRule(name: "Invalid", mode: "fixed", zone: "Invalid/Zone")
+        ]
+        let groups = MenuTimeZone.configured(policy: configured, system: system, clock: clock)
+        assert(groups.count == 2 && groups[0].rules.count == 1)
+        assert(groups[1].zone.identifier == "Asia/Tokyo" && groups[1].rules.count == 2 && groups[1].isDefault)
+        configured.rules = []; configured.default_zone = "Europe/London"
+        assert(MenuTimeZone.configured(policy: configured, system: TimeZone(identifier: "Etc/UTC")!, clock: clock).count == 2)
+        configured.default_zone = "US/Eastern"
+        assert(MenuTimeZone.configured(policy: configured, system: system, clock: clock).count == 1)
         assert(clock.make(policy: policy, preferences: preferences, date: epoch, system: system).label(for: .timeAndCity) == nil)
         policy.default_mode = "fixed"; policy.default_zone = "Asia/Tokyo"
         let tokyo = clock.make(policy: policy, preferences: preferences, date: epoch, system: system)
