@@ -17,7 +17,7 @@ The ES provisioning profile defaults to `/Users/ratazzi/workspace/floria/provisi
 
 ## GitHub releases
 
-The `Release` workflow runs `mise run release` on macOS ARM64. Pushing a `v*` tag creates a draft GitHub release; manually running it on `master` updates the `nightly` prerelease. Only a signed, notarized, stapled and Gatekeeper-verified DMG is uploaded. The separate CI workflow runs unit tests on pushes and pull requests.
+The `Release` workflow runs `mise run release` on macOS ARM64. Pushing a `vMAJOR.MINOR.PATCH` tag creates a draft GitHub release containing a signed update appcast; publish that draft as the latest release to offer it to stable users. Nightly builds run daily at 18:00 UTC or on manual dispatch from `master` and update the `nightly` prerelease. Only a signed, notarized, stapled and Gatekeeper-verified DMG is uploaded. CI runs unit tests, release feed tests and an application typecheck with Sparkle.
 
 Configure these repository Actions secrets (the same certificate and notary credentials as Floria):
 
@@ -25,10 +25,37 @@ Configure these repository Actions secrets (the same certificate and notary cred
 - `DEVELOPER_ID_IDENTITY`, `APPLE_TEAM_ID`
 - `ES_PROVISIONING_PROFILE_BASE64`: the base64-encoded Endpoint Security Developer ID profile, matching `Resources/Daemon.entitlements` and the helper identifier.
 - `NOTARIZE_APPLE_ID`, `NOTARIZE_PASSWORD`
+- `SPARKLE_PRIVATE_KEY`: the exported Sparkle Ed25519 private key (base64 text), used only by the signing step.
+
+Also configure the repository Actions **variable** `SPARKLE_PUBLIC_KEY` with its matching public key. Release builds require it and embed it as `SUPublicEDKey`; the feed generator verifies the DMG signature against this public key before uploading anything.
+
+For local signing, store `SPARKLE_PUBLIC_KEY` and `SPARKLE_PRIVATE_KEY` in the `[env]` section of `mise.local.toml`. This file is ignored by Git; keep its permissions at `0600`. Mise supplies these values to build and appcast tasks. Keep a protected backup and reuse this pair for future releases. GitHub Actions still requires its corresponding variable and secret; it cannot read the local file.
+
+The build downloads pinned Sparkle 2.10.1 with `gh` and verifies its SHA-256 before extracting it. Follow [Sparkle's key setup](https://sparkle-project.org/documentation/#eddsa-ed25519-signatures) once on a trusted Mac:
+
+```sh
+zsh scripts/release/fetch-sparkle.sh
+build/dependencies/sparkle/bin/generate_keys --account yoyo
+build/dependencies/sparkle/bin/generate_keys --account yoyo -p | gh variable set SPARKLE_PUBLIC_KEY
+```
+
+Export the key using `generate_keys --account yoyo -x <private-file>` into a protected temporary file, pass that file to `gh secret set SPARKLE_PRIVATE_KEY < <private-file>`, and remove the exported file afterward. Keep a protected backup of the key; do not commit or print it. The public key is not a secret. The workflow never generates replacement keys.
 
 The profile is decoded only for the build and removed afterward. Signed code uses Hardened Runtime and secure timestamps. `mise run notarize-dmg path/to/Yoyo.dmg` retries notarization without rebuilding, using the same notary environment variables.
 
 Release builds store state in `~/Library/Application Support/Yoyo`; the UI creates this directory before enabling the service. The daemon resolves the home of the logged-in console user at startup. Switching users while the service is running requires restarting it for the new user. Service stdout/stderr go to `/var/log/yoyo-stdout.txt` and `/var/log/yoyo-stderr.txt`.
+
+## Automatic updates
+
+**Software Updates…** selects Stable or Nightly and controls automatic checks. **Check for Updates…** starts a manual check. Fresh nightly installations default to Nightly; explicit user selection persists across upgrades. Stable uses `https://github.com/ratazzi/yoyo/releases/latest/download/appcast.xml`; Nightly uses `https://github.com/ratazzi/yoyo/releases/download/nightly/appcast.xml`. Both use Sparkle's install confirmation UI; automatic background installation is disabled.
+
+All releases use the same Release workflow's `GITHUB_RUN_NUMBER.GITHUB_RUN_ATTEMPT` as `CFBundleVersion` (including the helper) and appcast version. Stable display versions come from tags; nightly display versions include the build number. Retries receive distinct versions and archive names. Switching to Stable waits for a stable release with a higher build number; it never downgrades. Preserve this workflow's run sequence when migrating workflows, or explicitly choose a higher build-number scheme.
+
+Nightly archives use unique filenames and remain available for clients with cached feeds. Publication uploads the archive before replacing `appcast.xml`, serializes releases, and rejects older queued nightly builds. Do not delete old nightly DMGs while feeds may still reference them. Stable drafts do not affect the stable feed until published as latest. Before the first stable release, stable checks have no feed; use Nightly during that bootstrap period.
+
+During installation Yoyo waits for its registered background service to unregister before allowing Sparkle to terminate the app. A persisted recovery flag restores the service on next launch if the user's policy still enables it, including after an interrupted update. Failure to unregister cancels termination. Closing Yoyo normally continues to leave the service running. Launches during installation do not receive new timezone injection; existing processes retain their launch-time behavior.
+
+Local builds without `SPARKLE_PUBLIC_KEY` do not start the updater. Use `OUTPUT_APP=build/update-test/Yoyo.app mise run build-app` to validate embedding/signing without replacing the normal development bundle. The first Sparkle-enabled release must be installed manually because earlier versions contain no updater. Verify a real signed upgrade and service restart on a test Mac before promoting the first stable release.
 
 ## Service setup
 

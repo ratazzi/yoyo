@@ -10,4 +10,9 @@
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>SUFeedURL</key><string>https://github.com/ratazzi/yoyo/releases/latest/download/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAllowsAutomaticUpdates</key><false/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
+    <key>YoyoUpdateChannel</key><string>stable</string>
 </dict></plist>

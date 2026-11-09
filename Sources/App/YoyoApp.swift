@@ -15,9 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusMenu: StatusMenuController?
     private var windowBadge: WindowBadgeController?
     private var surgeBridge: SurgeBridge?
+    private var updater: AppUpdater!
+    private var updatesWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store = AppStore()
+        updater = AppUpdater(store: store)
         let socket = store.stateDirectory.appendingPathComponent("control.sock").path
         do {
             surgeBridge = try SurgeBridge(auditDirectory: store.stateDirectory, sessionLookup: { pid in
@@ -30,10 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.title = "TZ"
         let menu = NSMenu()
         for (title, action, key) in [("Open Yoyo", #selector(showMain), ""), ("Settings…", #selector(showSettings), ","),
-                                    ("Find Program…", #selector(focusSearch), "f")] {
+                                    ("Find Program…", #selector(focusSearch), "f"),
+                                    ("Software Updates…", #selector(showUpdates), "")] {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: key); entry.target = self; menu.addItem(entry)
         }
         menu.addItem(.separator())
+        let checkUpdate = NSMenuItem(title: "Check for Updates…", action: #selector(AppUpdater.checkForUpdates(_:)), keyEquivalent: "")
+        checkUpdate.target = updater; menu.addItem(checkUpdate)
         let quit = NSMenuItem(title: "Quit Yoyo", action: #selector(quitApp), keyEquivalent: "q"); quit.target = self; menu.addItem(quit)
         statusMenu = StatusMenuController(store: store, applicationMenu: menu) { [weak self] rule in
             self?.showMain()
@@ -67,6 +73,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         showMain()
     }
     func applicationWillTerminate(_ notification: Notification) { surgeBridge?.stop() }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        updater.applicationShouldTerminate()
+    }
+    @objc func showUpdates() {
+        if updatesWindow == nil {
+            let panel = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            panel.title = "Yoyo Updates"; panel.isReleasedWhenClosed = false
+            panel.contentView = NSHostingView(rootView: UpdatesView(updater: updater))
+            panel.setContentSize(panel.contentView!.fittingSize); panel.center()
+            updatesWindow = panel
+        }
+        NSApp.activate(ignoringOtherApps: true); updatesWindow?.makeKeyAndOrderFront(nil)
+    }
     @objc func showMain() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
     @objc func showTimeZones() {
         // Open the actual status-item menu after the application menu finishes tracking.
