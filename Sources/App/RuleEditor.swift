@@ -64,6 +64,7 @@ struct RuleEditor: View {
 
 struct SettingsView: View {
     @ObservedObject var store: AppStore
+    @ObservedObject var updater: AppUpdater
     @Environment(\.dismiss) private var dismiss
     @State private var defaultMode = "system"
     @State private var zone = "Asia/Tokyo"
@@ -72,6 +73,8 @@ struct SettingsView: View {
     @State private var favoriteZone = "Asia/Tokyo"
     @State private var clockFactory = ClockPresentationFactory()
     @State private var page = "Time Zones"
+    @State private var updateChannel = UpdateChannel.stable
+    @State private var automaticUpdates = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -80,9 +83,16 @@ struct SettingsView: View {
                 Text("Time Zones").tag("Time Zones")
                 Text("Appearance").tag("Appearance")
                 Text("Service").tag("Service")
+                Text("Updates").tag("Updates")
             }.pickerStyle(.segmented).labelsHidden()
             ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+            if page == "Updates" {
+                Surface {
+                    UpdatesView(updater: updater, channel: $updateChannel, automaticallyChecks: $automaticUpdates)
+                        .padding(12)
+                }
+            }
             if page == "Time Zones" {
             Surface {
                 VStack(alignment: .leading, spacing: 8) {
@@ -209,7 +219,7 @@ struct SettingsView: View {
             }
             }
             }
-            }.frame(height: page == "Service" ? 140 : (page == "Appearance" ? 320 : 300))
+            }.frame(height: page == "Service" ? 140 : (page == "Updates" ? 200 : (page == "Appearance" ? 320 : 300)))
             if let validation { Text(validation).foregroundStyle(.red).font(.callout) }
             HStack {
                 if page == "Service" { Button("Open Log Folder") { NSWorkspace.shared.open(store.stateDirectory) } }
@@ -220,7 +230,11 @@ struct SettingsView: View {
                         validation = "Choose a valid Dock time zone."; return
                     }
                     var candidate = store.policy; candidate.default_mode = defaultMode; candidate.default_zone = zone
-                    if store.save(candidate) && store.saveDisplayPreferences(display) { dismiss() }
+                    if store.save(candidate) && store.saveDisplayPreferences(display) {
+                        if updater.channel != updateChannel { updater.channel = updateChannel }
+                        if updater.automaticallyChecks != automaticUpdates { updater.automaticallyChecks = automaticUpdates }
+                        dismiss()
+                    }
                     else { validation = store.errorMessage; store.errorMessage = nil }
                 }.keyboardShortcut(.defaultAction)
             }
@@ -228,6 +242,7 @@ struct SettingsView: View {
         .onAppear {
             defaultMode = store.policy.default_mode; zone = store.policy.default_zone.isEmpty ? "Asia/Tokyo" : store.policy.default_zone
             display = store.displayPreferences
+            updateChannel = updater.channel; automaticUpdates = updater.automaticallyChecks
         }
     }
 

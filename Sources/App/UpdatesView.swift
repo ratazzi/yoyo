@@ -2,20 +2,24 @@ import SwiftUI
 
 struct UpdatesView: View {
     @ObservedObject var updater: AppUpdater
+    @Binding var channel: UpdateChannel
+    @Binding var automaticallyChecks: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Software Updates").font(.headline)
-            Picker("Update channel", selection: $updater.channel) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Installed version: \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")")
+                .fontWeight(.medium)
+            Picker("Update channel", selection: $channel) {
                 ForEach(UpdateChannel.allCases) { channel in Text(channel.title).tag(channel) }
             }.disabled(!updater.canCheckForUpdates)
-            Text("Nightly builds include the latest changes and may be less stable. Switching to Stable waits for a newer stable build; it does not downgrade this installation.")
+            Text(channel == .nightly
+                ? "Daily builds with the latest changes. May be less stable."
+                : "Stable releases only. Switching from Nightly waits for a newer stable version.")
                 .font(.caption).foregroundStyle(.secondary)
-            Toggle("Automatically check for updates", isOn: $updater.automaticallyChecks)
+            Toggle("Automatically check for updates", isOn: $automaticallyChecks).toggleStyle(.checkbox)
                 .disabled(!updater.canCheckForUpdates)
-            Button("Check for Updates…") { updater.checkForUpdates(nil) }.disabled(!updater.canCheckForUpdates)
-            Text("Updates are downloaded from GitHub and installed after confirmation. The background service pauses during installation and resumes when Yoyo reopens.")
+            Text("You’ll be asked before an update is installed.")
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(20).frame(width: 420)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
