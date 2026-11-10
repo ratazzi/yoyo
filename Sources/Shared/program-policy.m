@@ -1,6 +1,30 @@
 #import "program-policy.h"
 #import "timezone-policy.h"
 #include <fnmatch.h>
+#include <unistd.h>
+#include <errno.h>
+
+BOOL TZWritePrivateData(NSData *data, NSString *path, NSError **error) {
+    char *temporary = strdup([[path stringByAppendingString:@".XXXXXX"] fileSystemRepresentation]);
+    int fd = mkstemp(temporary); // 0600 from creation, including the first write.
+    int failure = fd < 0 ? errno : 0;
+    const char *bytes = data.bytes;
+    NSUInteger remaining = data.length;
+    while (!failure && remaining) {
+        ssize_t count = write(fd, bytes, remaining);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) { failure = count < 0 ? errno : EIO; break; }
+        bytes += count; remaining -= count;
+    }
+    if (fd >= 0 && close(fd) && !failure) failure = errno;
+    if (!failure && rename(temporary, path.fileSystemRepresentation)) failure = errno;
+    if (failure) {
+        unlink(temporary);
+        if (error) *error = [NSError errorWithDomain:NSPOSIXErrorDomain code:failure userInfo:nil];
+    }
+    free(temporary);
+    return !failure;
+}
 
 @implementation TZPolicyFile
 + (NSDictionary *)readFromDirectory:(NSString *)directory migrateLegacy:(BOOL)migrate error:(NSError **)error {
@@ -18,7 +42,7 @@
 + (BOOL)write:(NSDictionary *)value toDirectory:(NSString *)directory error:(NSError **)error {
     if (![TZProgramPolicy policyWithDictionary:value error:error]) return NO;
     NSData *data = [NSPropertyListSerialization dataWithPropertyList:value format:NSPropertyListXMLFormat_v1_0 options:0 error:error];
-    return data && [data writeToFile:[directory stringByAppendingPathComponent:@"policy.plist"] options:NSDataWritingAtomic error:error];
+    return data && TZWritePrivateData(data, [directory stringByAppendingPathComponent:@"policy.plist"], error);
 }
 @end
 
@@ -26,7 +50,7 @@
 - (NSDictionary *)dictionary {
     return @{@"id": self.identifier, @"name": self.name ?: self.pattern, @"kind": self.kind,
              @"pattern": self.pattern, @"mode": self.mode, @"zone": self.zone ?: @"",
-             @"enabled": @(self.enabled), @"logging": @(self.logging)};
+             @"enabled": @(self.enabled), @"logging": @(self.logging), @"environment": self.environment ?: @{}};
 }
 @end
 @implementation TZSession
@@ -36,6 +60,7 @@
     copy.zone = self.zone; copy.logging = self.logging; copy.ancestorRules = self.ancestorRules;
     copy.logRules = self.logRules;
     copy.baseline = self.baseline;
+    copy.environment = self.environment;
     return copy;
 }
 @end
@@ -89,6 +114,26 @@ static NSInteger specificity(TZRule *rule) {
         rule.mode = entry[@"mode"];
         rule.enabled = entry[@"enabled"] ? [entry[@"enabled"] boolValue] : YES;
         rule.logging = [entry[@"logging"] boolValue];
+        id environment = entry[@"environment"] ?: @{};
+        if (![environment isKindOfClass:NSDictionary.class] || [environment count] > 64)
+            return [self fail:@"Expected at most 64 environment variables per rule" error:error];
+        NSUInteger environmentBytes = 0;
+        NSCharacterSet *firstCharacters = [NSCharacterSet characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"];
+        NSCharacterSet *nameCharacters = [NSCharacterSet characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0123456789"];
+        for (id name in environment) {
+            id value = environment[name];
+            if (![name isKindOfClass:NSString.class] || ![name length] || [name length] > 128 ||
+                ![firstCharacters characterIsMember:[name characterAtIndex:0]] ||
+                [name rangeOfCharacterFromSet:nameCharacters.invertedSet].location != NSNotFound)
+                return [self fail:@"Environment names must use letters, digits and underscores, and cannot start with a digit" error:error];
+            if ([@[@"TZ", @"TZFILE", @"PROCESS_TIMEZONE", @"DYLD_INSERT_LIBRARIES"] containsObject:name] || [name hasPrefix:@"TIMEZONE_LAB_"])
+                return [self fail:@"This environment variable is managed by Yoyo; use the time zone setting instead" error:error];
+            if (![value isKindOfClass:NSString.class] || [value rangeOfString:[NSString stringWithFormat:@"%C", (unichar)0]].location != NSNotFound)
+                return [self fail:@"Environment values must be strings without NUL characters" error:error];
+            environmentBytes += [name lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding] + 2;
+            if (environmentBytes > 32768) return [self fail:@"Environment variables must fit within 32 KiB per rule" error:error];
+        }
+        rule.environment = environment;
         if (![rule.identifier isKindOfClass:NSString.class] || !rule.identifier.length || [identifiers containsObject:rule.identifier] ||
             ![@[@"app", @"cli"] containsObject:rule.kind] || ![@[@"default", @"fixed", @"ask"] containsObject:rule.mode] ||
             ![rule.pattern isKindOfClass:NSString.class] || !rule.pattern.isAbsolutePath)
@@ -154,6 +199,9 @@ static NSInteger specificity(TZRule *rule) {
     TZSession *session = parent ? [parent copy] : [TZSession new];
     if (!session.identifier) session.identifier = NSUUID.UUID.UUIDString;
     session.ruleID = selected.identifier; session.mode = selected.mode; session.zone = selected.zone;
+    NSMutableDictionary *environment = [parent.environment mutableCopy] ?: [NSMutableDictionary new];
+    [environment addEntriesFromDictionary:selected.environment];
+    session.environment = environment;
     session.logging = parent.logging || selected.logging;
     session.logRules = [parent.logRules ?: [NSSet set] setByAddingObject:selected.identifier];
     NSMutableSet *ancestors = [parent.ancestorRules mutableCopy] ?: [NSMutableSet new];

@@ -77,13 +77,17 @@ Ask Every Launch choices are never saved as the next launch's answer. Each new r
 
 ## Files
 
+Program rules may include an `environment` dictionary of string keys and values (omitted in old policies means empty). Each rule supports up to 64 variables and 32 KiB of UTF-8 environment entries; names are at most 128 ASCII letters, digits or underscores, starting with a letter or underscore. NULs are rejected. `TZ`, `TZFILE`, `PROCESS_TIMEZONE`, `DYLD_INSERT_LIBRARIES` and the `TIMEZONE_LAB_` prefix are reserved. Values are not expanded, and blank values are retained. Environment-only rules still require the background service and a target supported by startup rewriting; the same code-signing restrictions apply as for time zone rules.
+
+Resolved values are copied into the launch session, inherited by descendants, and merged with explicit child overrides. Editing a rule or restarting the daemon does not replace the values chosen for an existing session. Choosing System Default in an Ask Every Launch prompt only changes time zone behavior; configured environment variables still apply. Cancelling the prompt prevents launch and injection.
+
 The development build uses `build/state/`:
 
 - `policy.plist`: XML property list containing validated rules, ES enabled flag, and app default. On first launch, a valid legacy `policy.json` is migrated if no plist exists; the JSON remains as a backup. Once present, the plist takes precedence, including when it is invalid.
 - `daemon-state.json`: health and latest launch outcome.
 - `behavior.jsonl`: optional metadata logs, rotated at 4 MiB with four archives.
 - `recent-apps.json`: UI-owned application launch history, up to 100 regular/menu bar apps by Bundle ID. Uses Workspace lifecycle notifications and actual launch dates; CLI, helpers, background agents and focus changes do not refresh it. Works without ES. The previous experimental `recent-launches.json` is left untouched and no longer used.
-- `active-sessions.json`: process-session recovery metadata, including only the original TZ/TZFILE environment values needed for restoration; this is not a behavior log.
+- `active-sessions.json`: private process-session recovery metadata, including original TZ/TZFILE values and resolved custom environment variables. Like `policy.plist`, it is atomically written with `0600` permissions; values are not included in behavior logs or public status.
 - `control.sock`: authenticated local UI and hook communication.
 - `trace-*.flag`: shared live logging switches, cleaned up after tracked processes exit.
 

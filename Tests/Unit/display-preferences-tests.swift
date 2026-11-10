@@ -5,6 +5,16 @@ struct DisplayPreferencesTests {
     static func main() throws {
         let clock = ClockPresentationFactory()
         var policy = PolicyDocument(); var preferences = DisplayPreferences()
+        var environmentRule = ProgramRule()
+        environmentRule.environment = ["EXAMPLE": "literal $HOME=a b", "EMPTY": ""]
+        let encodedRule = try JSONEncoder().encode(environmentRule)
+        let decodedRule = try JSONDecoder().decode(ProgramRule.self, from: encodedRule)
+        assert(decodedRule == environmentRule)
+        var legacyRule = try JSONSerialization.jsonObject(with: encodedRule) as! [String: Any]
+        legacyRule.removeValue(forKey: "environment")
+        let legacyRuleData = try JSONSerialization.data(withJSONObject: legacyRule)
+        let decodedLegacyRule = try JSONDecoder().decode(ProgramRule.self, from: legacyRuleData)
+        assert(decodedLegacyRule.environment.isEmpty)
         let epoch = Date(timeIntervalSince1970: 0)
         let system = TimeZone(identifier: "America/New_York")!
         var configured = PolicyDocument()
@@ -104,6 +114,8 @@ struct DisplayPreferencesTests {
         assert(rows[0].running && !rows[1].running && !rows[2].running)
         menuPolicy.default_mode = "system"
         assert(!MenuProgramOverrides.rows(policy: menuPolicy, runningAppPaths: [], system: system, clock: clock).contains { $0.rule.id == excluded.id })
+        menuPolicy.rules = [environmentRule]
+        assert(MenuProgramOverrides.rows(policy: menuPolicy, runningAppPaths: [], system: system, clock: clock).count == 1)
         print("Clock display: system suppression, aliases, distinct DST rules, city names, formats, Dock settings and persistence: PASS")
         print("Menu overrides: aliases, system exclusions, disabled rules, ask mode and running app priority: PASS")
     }
