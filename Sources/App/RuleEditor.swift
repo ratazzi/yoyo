@@ -2,15 +2,23 @@ import SwiftUI
 import AppKit
 import ServiceManagement
 
+private struct EnvironmentVariable: Identifiable {
+    let id = UUID()
+    var name: String
+    var value: String
+}
+
 struct RuleEditor: View {
     @ObservedObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var rule: ProgramRule
     @State private var validation: String?
+    @State private var variables: [EnvironmentVariable]
     private let existing: Bool
 
     init(store: AppStore, initial: ProgramRule) {
         self.store = store; _rule = State(initialValue: initial)
+        _variables = State(initialValue: initial.environment.keys.sorted().map { EnvironmentVariable(name: $0, value: initial.environment[$0]!) })
         existing = store.policy.rules.contains { $0.id == initial.id }
     }
     var body: some View {
@@ -19,7 +27,7 @@ struct RuleEditor: View {
                 ProgramIcon(path: rule.pattern, kind: rule.kind, size: 32)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(existing ? "Edit Program Rule" : "Add Program Rule").font(.headline)
-                    Text("Choose how this program uses time zones.").font(.caption).foregroundStyle(.secondary)
+                    Text("Choose this program’s time zone and environment.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Form {
@@ -29,7 +37,7 @@ struct RuleEditor: View {
                 }
                 TextField(rule.kind == "app" ? "Application Path" : "Executable or Pattern", text: $rule.pattern)
                 Picker("Time Zone", selection: $rule.mode) {
-                    Text("System Default — No Injection").tag("default")
+                    Text("System Default").tag("default")
                     Text("Fixed Time Zone").tag("fixed")
                     Text("Ask Every Launch").tag("ask")
                 }
@@ -41,19 +49,54 @@ struct RuleEditor: View {
                 Toggle("Enable this rule", isOn: $rule.enabled)
                 Toggle("Record behavior to a log file", isOn: $rule.logging)
             }.formStyle(.grouped).scrollDisabled(true).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Environment Variables").fontWeight(.medium)
+                    Spacer()
+                    Button { variables.append(EnvironmentVariable(name: "", value: "")) } label: {
+                        Label("Add Variable", systemImage: "plus")
+                    }.disabled(variables.count >= 64)
+                }
+                if !variables.isEmpty {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach($variables) { $variable in
+                                HStack(spacing: 8) {
+                                    TextField("Name", text: $variable.name).frame(width: 140)
+                                        .accessibilityLabel("Variable name")
+                                    TextField("Value", text: $variable.value).accessibilityLabel("Variable value")
+                                    Button { variables.removeAll { $0.id == variable.id } } label: {
+                                        Image(systemName: "minus.circle")
+                                    }.buttonStyle(.plain).help("Remove variable").accessibilityLabel("Remove variable")
+                                }
+                            }
+                        }
+                    }.frame(height: min(CGFloat(variables.count) * 30, 120))
+                }
+                Text("Overrides existing values on next launch, including with System Default. Values are literal; $VARIABLE is not expanded. Child processes inherit them.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             Text(rule.kind == "app" ? "Includes programs inside the application bundle. Explicit child rules take priority." : "Use an absolute path. * matches within one path component. Child processes inherit this launch choice.")
-                .font(.callout).foregroundStyle(.secondary)
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if rule.logging {
                 Text("Records process activity, file access, and time zone calls. File contents are never recorded.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            if let validation { Text(validation).foregroundStyle(.red).font(.callout) }
+            if let validation { Text(validation).foregroundStyle(.red).font(.callout).fixedSize(horizontal: false, vertical: true) }
             Divider()
             HStack {
                 if existing { Button("Delete Rule", role: .destructive) { store.removeRule(rule); dismiss() } }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(existing ? "Save Changes" : "Add Rule") {
+                    var environment: [String: String] = [:]
+                    for variable in variables {
+                        if variable.name.isEmpty && variable.value.isEmpty { continue }
+                        if environment.updateValue(variable.value, forKey: variable.name) != nil {
+                            validation = "Environment variable names must be unique."; return
+                        }
+                    }
+                    rule.environment = environment
                     if store.saveRule(rule) { dismiss() }
                     else { validation = store.errorMessage; store.errorMessage = nil }
                 }.keyboardShortcut(.defaultAction)

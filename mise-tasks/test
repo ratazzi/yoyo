@@ -10,6 +10,8 @@ build/tests/update-channel-tests
 build/tests/update-service-recovery-tests
 /usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/policy-tests.m Sources/Shared/program-policy.m -o build/tests/policy-tests
 build/tests/policy-tests
+/usr/bin/clang -fobjc-arc -ISources/Shared -framework Foundation Tests/Unit/environment-policy-tests.m Sources/Shared/program-policy.m -o build/tests/environment-policy-tests
+build/tests/environment-policy-tests
 /usr/bin/swiftc -module-cache-path build/tests/ModuleCache -parse-as-library Sources/App/RecentApps.swift Tests/Unit/recent-apps-tests.swift -o build/tests/recent-apps-tests
 build/tests/recent-apps-tests
 /usr/bin/clang -c Sources/Shared/timezone-display.c -o build/tests/timezone-display.o

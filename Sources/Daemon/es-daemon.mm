@@ -147,11 +147,12 @@ static void persist(void) {
     for (NSDictionary *record in records.allValues) {
         NSMutableDictionary *item = [record mutableCopy]; TZSession *s = record[@"session"];
         item[@"session"] = @{@"id": s.identifier, @"rule": s.ruleID, @"mode": s.mode, @"zone": s.zone ?: @"",
-            @"ancestors": s.ancestorRules.allObjects, @"log_rules": s.logRules.allObjects, @"baseline": s.baseline ?: @{}};
+            @"ancestors": s.ancestorRules.allObjects, @"log_rules": s.logRules.allObjects, @"baseline": s.baseline ?: @{},
+            @"environment": s.environment ?: @{}};
         [saved addObject:item];
     }
-    write_json(@"active-sessions.json", saved);
-    chmod([[directory stringByAppendingPathComponent:@"active-sessions.json"] fileSystemRepresentation], 0600);
+    NSData *data = [NSJSONSerialization dataWithJSONObject:saved options:NSJSONWritingPrettyPrinted error:nil];
+    if (data) TZWritePrivateData(data, [directory stringByAppendingPathComponent:@"active-sessions.json"], nil);
 }
 static void publish(void) {
     state[@"updated_at"] = @([NSDate date].timeIntervalSince1970);
@@ -230,6 +231,7 @@ static void restore(void) {
         s.identifier = value[@"id"]; s.ruleID = value[@"rule"]; s.mode = value[@"mode"]; s.zone = value[@"zone"];
         s.ancestorRules = [NSSet setWithArray:value[@"ancestors"] ?: @[]]; s.logRules = [NSSet setWithArray:value[@"log_rules"] ?: @[]];
         s.baseline = value[@"baseline"] ?: @{};
+        s.environment = value[@"environment"] ?: @{};
         if (!s.identifier || !s.ruleID || !s.mode) continue;
         NSMutableDictionary *record = [item mutableCopy]; record[@"session"] = s;
         records[[NSString stringWithFormat:@"%d:%@", pid, item[@"pidversion"]]] = record;
@@ -296,15 +298,16 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
     if (allowed && session) {
         if (!session.baseline) session.baseline = baseline(message);
         BOOL fixed = [session.mode isEqual:@"fixed"];
-        if (fixed || inherited_insertion(message)) {
+        if (fixed || session.environment.count || inherited_insertion(message)) {
             try {
                 if (deadline_seconds(message) < 0.25) throw std::runtime_error("insufficient AUTH_EXEC deadline remaining");
                 StartupTimezone setting;
-                setting.inject_library = true;
+                setting.inject_library = fixed;
                 setting.zone = fixed ? session.zone.UTF8String : "";
                 record[@"environment_only"] = @(!setting.inject_library);
                 TZSession *previous = parent[@"session"]; setting.previous_zone = previous.zone.UTF8String ?: "";
                 for (NSString *name in session.baseline) setting.baseline[name.UTF8String] = [session.baseline[name] UTF8String];
+                for (NSString *name in session.environment) setting.extra[name.UTF8String] = [session.environment[name] UTF8String];
                 if (fixed) setting.extra["TIMEZONE_LAB_SESSION"] = session.identifier.UTF8String;
                 if (fixed && setting.inject_library) {
                     tracePath = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"trace-%@.flag", NSUUID.UUID.UUIDString]];
@@ -317,7 +320,7 @@ static void complete(const es_message_t *message, TZDecision *decision, NSDictio
                     setting.extra["TIMEZONE_LAB_TRACE_CONTROL"] = tracePath.UTF8String;
                 }
                 configure_startup_environment(audit_token_to_pid(target->audit_token), library.UTF8String, setting);
-                detail = fixed ? @"Startup environment prepared; awaiting hooks_loaded" : @"Inherited timezone environment removed";
+                detail = fixed ? @"Startup environment prepared; awaiting hooks_loaded" : (session.environment.count ? @"Custom startup environment prepared" : @"Inherited timezone environment removed");
             } catch (const std::exception &error) { allowed = NO; detail = @(error.what()); }
         }
     }
@@ -540,6 +543,7 @@ static void test_session_recovery(void) {
     ]} error:nil];
     TZSession *session = [policy decisionForPath:@(path) invokedPath:nil script:nil parent:nil].session;
     session.baseline = @{@"TZ": @"Etc/UTC"};
+    session.environment = @{@"EXAMPLE_SECRET": @"recovery-value-not-for-logs"};
     NSString *identifier = session.identifier;
     NSMutableDictionary *record = [@{@"pid": @(getpid()), @"pidversion": @1, @"uid": @(owner), @"parent_pid": @(getppid()),
         @"path": @(path), @"session": session, @"loaded": @NO, @"environment_only": @YES,
@@ -561,9 +565,11 @@ static void test_session_recovery(void) {
     BOOL valid = records.count == 1 && [recovered.identifier isEqual:identifier] &&
         [recovered.zone isEqual:@"Asia/Tokyo"] && [recovered.baseline[@"TZ"] isEqual:@"Etc/UTC"] &&
         [recovered.ancestorRules containsObject:@"recovery"] && [restored[@"environment_only"] boolValue] &&
-        [public_record(restored)[@"confirmation"] isEqual:@"not_requested"];
+        [public_record(restored)[@"confirmation"] isEqual:@"not_requested"] &&
+        [recovered.environment[@"EXAMPLE_SECRET"] isEqual:@"recovery-value-not-for-logs"] &&
+        ![public_record(restored).description containsString:@"recovery-value-not-for-logs"];
     TZDecision *child = [policy decisionForPath:@"/outside-child" invokedPath:nil script:nil parent:recovered];
-    valid &= child.inherited && [child.session.zone isEqual:@"Asia/Tokyo"];
+    valid &= child.inherited && [child.session.zone isEqual:@"Asia/Tokyo"] && [child.session.environment isEqual:recovered.environment];
     [records removeAllObjects]; persist(); restore();
     valid &= records.count == 0; // Current rules never synthesize a past launch session.
     [NSFileManager.defaultManager removeItemAtPath:directory error:nil];

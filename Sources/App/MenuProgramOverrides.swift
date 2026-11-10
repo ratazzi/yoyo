@@ -10,7 +10,7 @@ enum MenuProgramOverrides {
         let defaultZone = policy.default_mode == "fixed" ? TimeZone(identifier: policy.default_zone) ?? system : system
         return policy.rules.compactMap { rule -> MenuProgramOverride? in
             guard rule.enabled else { return nil }
-            if rule.mode != "ask" {
+            if rule.mode != "ask" && rule.environment.isEmpty {
                 var candidate = PolicyDocument()
                 candidate.default_mode = "fixed"
                 candidate.default_zone = rule.mode == "fixed" ? rule.zone : system.identifier

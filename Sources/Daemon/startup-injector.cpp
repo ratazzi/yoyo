@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <iterator>
 #include <stdexcept>
 #include <vector>
 
@@ -52,8 +53,12 @@ void set_variable(std::vector<std::string> &environment, const std::string &key,
     std::string prefix = key + "=";
     auto found = std::find_if(environment.begin(), environment.end(), [&](const auto &s) { return s.starts_with(prefix); });
     if (found == environment.end()) environment.push_back(prefix + value);
-    else if (append && found->size() > prefix.size()) *found += ":" + value;
-    else *found = prefix + value;
+    else {
+        if (append && found->size() > prefix.size()) *found += ":" + value;
+        else *found = prefix + value;
+        // getenv and child launchers must agree even if input contains duplicates.
+        environment.erase(std::remove_if(std::next(found), environment.end(), [&](const auto &s) { return s.starts_with(prefix); }), environment.end());
+    }
 }
 void erase_variable(std::vector<std::string> &environment, const std::string &key) {
     std::string prefix = key + "=";
@@ -99,8 +104,8 @@ void transform_environment(std::vector<std::string> &environment, const std::str
             set_variable(environment, "DYLD_INSERT_LIBRARIES", library, true);
             set_variable(environment, "PROCESS_TIMEZONE", policy.zone, false);
         }
-        for (const auto &[key, value] : policy.extra) set_variable(environment, key, value, false);
     }
+    for (const auto &[key, value] : policy.extra) set_variable(environment, key, value, false);
 }
 // On success, the relocated strings intentionally belong to the target until it exits.
 Word rewrite(task_t task, Word stack, const std::string &library, const StartupTimezone &policy) {
@@ -116,6 +121,12 @@ Word rewrite(task_t task, Word stack, const std::string &library, const StartupT
     auto apple = read_vector(task, cursor, budget);
     if (args.size() != argc) throw std::runtime_error("startup argc mismatch");
     transform_environment(environment, library, policy);
+    if (environment.size() >= 4096) throw std::runtime_error("startup environment count limit exceeded");
+    size_t output_bytes = 0;
+    for (const auto *values : {&args, &environment, &apple}) for (const auto &value : *values) {
+        output_bytes += value.size() + 1;
+        if (value.size() >= 65536 || output_bytes > 1024 * 1024) throw std::runtime_error("startup string limit exceeded");
+    }
     std::vector<char> strings;
     std::vector<Word> frame{header, argc};
     std::vector<size_t> pointer_slots;
@@ -219,6 +230,30 @@ void test_startup_stack_rewrite() {
         apples == std::vector<std::string>{apple};
     mach_vm_deallocate(mach_task_self(), allocation, 4096);
     if (!valid) throw std::runtime_error("startup stack preservation test failed");
+    // Exercise the actual stack rewrite for an environment-only rule.
+    frame.fill(0); frame[0] = (Word)&header; frame[1] = 1; frame[2] = (Word)arg;
+    frame[4] = (Word)existing; frame[5] = (Word)unchanged; frame[7] = (Word)apple;
+    StartupTimezone custom; custom.inject_library = false;
+    custom.extra = {{"KEEP", "literal $HOME=a b"}, {"EMPTY", ""}};
+    allocation = rewrite(mach_task_self(), (Word)frame.data(), "/test.dylib", custom);
+    cursor = (Word)&frame[2]; budget = 1024 * 1024;
+    args = read_vector(mach_task_self(), cursor, budget);
+    environment = read_vector(mach_task_self(), cursor, budget);
+    apples = read_vector(mach_task_self(), cursor, budget);
+    valid = args == std::vector<std::string>{arg} && apples == std::vector<std::string>{apple} &&
+        environment == std::vector<std::string>{existing, "KEEP=literal $HOME=a b", "EMPTY="};
+    mach_vm_deallocate(mach_task_self(), allocation, 4096);
+    if (!valid) throw std::runtime_error("environment-only startup rewrite changed timezone, hooks or startup arguments");
+    std::vector<std::string> duplicated{"KEEP=old", "KEEP=duplicate", "TZ=Etc/UTC"};
+    transform_environment(duplicated, "/test.dylib", custom);
+    if (duplicated != std::vector<std::string>{"KEEP=literal $HOME=a b", "TZ=Etc/UTC", "EMPTY="})
+        throw std::runtime_error("custom environment did not replace duplicate keys");
+    StartupTimezone fixedCustom = custom; fixedCustom.zone = "Asia/Tokyo"; fixedCustom.inject_library = true;
+    std::vector<std::string> fixedValues;
+    transform_environment(fixedValues, "/test.dylib", fixedCustom);
+    if (std::find(fixedValues.begin(), fixedValues.end(), "KEEP=literal $HOME=a b") == fixedValues.end() ||
+        std::find(fixedValues.begin(), fixedValues.end(), "DYLD_INSERT_LIBRARIES=/test.dylib") == fixedValues.end())
+        throw std::runtime_error("custom environment was not combined with timezone hooks");
     StartupTimezone environment_only; environment_only.zone = "Asia/Tokyo"; environment_only.inject_library = false;
     environment_only.extra["TIMEZONE_LAB_SESSION"] = "tz-only";
     std::vector<std::string> tz_only{"KEEP=yes", "TZ=Etc/UTC", "DYLD_INSERT_LIBRARIES=/other.dylib"};

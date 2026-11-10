@@ -4,11 +4,11 @@
 #include <map>
 
 struct StartupTimezone {
-    std::string zone; // empty restores the normal environment without injecting
+    std::string zone; // empty restores the system timezone without loading hooks
     bool inject_library = true;
     std::string previous_zone;
     std::map<std::string, std::string> baseline;
-    std::map<std::string, std::string> extra;
+    std::map<std::string, std::string> extra; // applied with or without a fixed timezone
 };
 
 // Rewrites startup argv/env/apple pointer vectors without changing SP or executable code.

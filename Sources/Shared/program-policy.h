@@ -1,6 +1,8 @@
 #pragma once
 #import <Foundation/Foundation.h>
 
+FOUNDATION_EXPORT BOOL TZWritePrivateData(NSData *data, NSString *path, NSError **error);
+
 @interface TZPolicyFile : NSObject
 + (NSDictionary *)readFromDirectory:(NSString *)directory migrateLegacy:(BOOL)migrate error:(NSError **)error;
 + (BOOL)write:(NSDictionary *)value toDirectory:(NSString *)directory error:(NSError **)error;
@@ -15,6 +17,7 @@
 @property(copy) NSString *zone;
 @property BOOL enabled;
 @property BOOL logging;
+@property(copy) NSDictionary<NSString *, NSString *> *environment;
 - (NSDictionary *)dictionary;
 @end
 
@@ -27,6 +30,7 @@
 @property(copy) NSSet<NSString *> *ancestorRules;
 @property(copy) NSSet<NSString *> *logRules;
 @property(copy) NSDictionary *baseline; // original TZ/TZFILE, never logged
+@property(copy) NSDictionary<NSString *, NSString *> *environment; // resolved launch values, never logged
 @end
 
 @interface TZDecision : NSObject

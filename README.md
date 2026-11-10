@@ -8,11 +8,13 @@ Open `build/Yoyo.app`. Use **+** to add an application, executable, or path patt
 
 You can also drag applications or executable files onto the main window. Drop multiple programs to review their rules in sequence; dropping an existing program opens its rule instead of creating a duplicate. Other files and ordinary folders are skipped.
 
-- **System Default** leaves the program's normal environment intact, without injection.
+- **System Default** leaves the time zone unchanged and loads no time zone hooks. Extra environment variables still apply.
 - **Fixed Time Zone** applies the selected IANA time zone.
 - **Ask Every Launch** asks once per independent launch. Cancelling or timing out stops the launch.
 
 **Settings → Default Time Zone** controls every new program without a matching rule. It can differ from the system time zone. Explicit System Default rules exclude programs. Children inherit the launch choice unless a new explicit rule overrides it.
+
+**Environment Variables** in a program rule adds or overrides named values on subsequent launches. It works with all time zone modes, including System Default without loading a library. Values are literal (no `$PATH` or shell expansion), and an empty value sets an empty string. Child processes inherit the launch-time values, including launches with an empty environment; an explicit child rule merges its values over the inherited ones. Removing a variable affects future launches, not existing sessions. Yoyo-managed time zone/injection variables are reserved. Rules and private session recovery data are saved locally with `0600` permissions; environment values are never included in behavior logs or public process status.
 
 The menu bar's Time Zones overview shows System Default plus distinct time zones configured by the global default or enabled fixed program rules. Equivalent aliases are grouped together; favorites alone do not appear here. Open a time zone to see its configured programs and edit their rules. The checkmark identifies the global default. Use the separate Default Time Zone submenu to change it; this picker includes favorites and configured zones. Manage favorites in Settings. Program Overrides lists enabled rules that differ from the default, plus Ask Every Launch rules. Running applications appear first; command-line rules use the Terminal icon without a type or running-state label. Click a program to edit its rule. These are configured rules, not a report of the time zone already loaded by a running process; changes apply to subsequent launches.
 
@@ -20,6 +22,8 @@ When the Dock icon is shown, its flip-clock artwork displays the current hour an
 **Settings → Appearance → Dock Time Zone** can independently follow the default, use the system time zone, or select a custom zone. Changes apply immediately after saving and persist across restarts; menu bar and program time zones remain controlled by their own settings.
 
 **Settings → Show Time Zone Near Active Window** enables a mouse-through city/offset badge outside the frontmost app's focused window. It requires Accessibility access and an ES process session with confirmed hooks, matching executable and launch identity. It never substitutes a newly edited rule for a running process's launch time zone. The badge tries above, right, below, then left of the window; it stays hidden when there is no outside space, in full screen, or when the confirmed zone matches the system. **Preview Badge** shows a labeled five-second preview on Yoyo's own window without Accessibility access. The first version samples window position at 5Hz and refreshes the process session every two seconds.
+
+Program Overrides also includes enabled rules with extra environment variables, even when their time zone matches the default.
 
 Behavior logging is optional per rule and writes metadata to `build/state/behavior.jsonl`. There is no log viewer in the app. File contents, full arguments, and environment variables are not logged.
 
